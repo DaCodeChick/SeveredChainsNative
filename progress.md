@@ -269,7 +269,8 @@ supersede the specific items listed in §7.
    LICENSE in repo — confirm); intro.mp4 reuse; Discord scope (deferred to
    M11); FMVs (G5, likely no).
 2. **Decisions (dependencies.md §2):** G1 shader tools (glslang/
-   SPIRV-Cross/DXC); G2 stb_image; G3 XA cache PCM/WAV (reco) vs libopus;
+   SPIRV-Cross/DXC); G2 SDL3_image (replaces stb_image — owner: we use
+   SDL3, so the official SDL3 companion); G3 XA cache PCM/WAV (reco) vs libopus;
    G4 libcurl updater (reco yes); G5 ffmpeg (reco no); **new: fate
    compiler — ANTLR4-C++ (LGPL, runtime, exceptions) vs recommended
    hand-rolled parser (no new dep)**.

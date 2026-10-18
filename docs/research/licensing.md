@@ -81,7 +81,7 @@
 | EnTT | MIT | keep notice |
 | Luau | MIT | keep notice |
 | Qt 6 | **LGPL v3** (or commercial) | **dynamic linking only** for the Qt-using tools (no static linking, no "static Qt" binaries without an exception); keep Qt's LICENSE files in the tools' distribution; state that the tools may be relinked against other Qt versions (LGPL static-link exception is not needed because we dynamic-link). The *game* doesn't link Qt at all (cleanest possible posture) |
-| stb_image | public domain | none |
+| SDL3_image | zlib (same as SDL3) | permissive; keep the copyright notice in dists |
 | glslang/SPIRV-Cross/DXC | MIT (build-time) | notices in repo (we link nothing at runtime) |
 | libopus (if approved) | BSD | keep notice |
 | libcurl (if approved) | MIT + OpenSSL (Apache/SSLeay) or platform TLS | keep notices; OpenSSL dual license fine |

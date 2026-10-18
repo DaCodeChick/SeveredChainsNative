@@ -10,7 +10,7 @@ the LodMod pattern, engine-design.md §6).
 
 **Dependency approval gates** (dependencies.md §2):
 - G1: glslang + SPIRV-Cross + DXC (build-time shader tools) — **before M4**.
-- G2: stb_image/SDL_stb_image (PNG decode) — **before M2** (UI PNGs).
+- G2: SDL3_image (PNG decode) — **before M2** (UI PNGs).
 - G3: XA cache format decision (PCM/WAV vs libopus) — **before M6**.
 - G4: libcurl (launcher auto-update) — **before M11** (launcher feature).
 - G5: ffmpeg/libav (FMVs) — **before M11** (likely deferred to post-M12).

@@ -158,11 +158,9 @@ All translucent: `write_mask=false` on depth.
   slots; 8bpp: 1px/byte; 15bpp: direct) → transfer buffer → texture. Same
   "absolute VRAM coordinates" stitching model (tpage regions) preserved — the
   native `VramTexture` equivalent.
-- Mod atlas (512×512 packer) + UI PNGs (STB-like decode — **needs a PNG
-  decoder**: SDL3 has `SDL_LoadBMP`/surface APIs; PNG decoding is **not** in
-  SDL3 core → use **SDL_stb_image** (SDL's official companion, zlib-licensed
-  C) — see dependencies.md, approval needed or bundle stb_image single-file
-  (public domain) directly).
+- Mod atlas (512×512 packer) + UI PNGs (PNG decode — SDL3 has `SDL_LoadBMP`/
+surface APIs; PNG decoding is **not** in SDL3 core → use **SDL3_image**,
+the official SDL3 companion, zlib-licensed C — see dependencies.md, G2).
 - Render targets: RGBA8; depth as above.
 - Save-card textures & DABA extraction: port (GPU VRAM upload path identical).
 

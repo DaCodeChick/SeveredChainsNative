@@ -52,7 +52,7 @@ loadable at runtime); the host is always an executable.
 |---|---|---|
 | `psx` | library (typeless — `BUILD_SHARED_LIBS` selects the build form); **prefix-free**, **zero third-party deps**; no SDL/Qt/Luau/engine | C++23 std only |
 | `scdabas` | library (typeless); std only; host-interface driven | C++23 std only |
-| `scengine` | library (typeless); symbol prefix `sc_`, hidden visibility (shared builds) | **psx**, SDL3, GLM (hdr), EnTT (hdr), Luau, stb_image, (libcurl/libopus optional) |
+| `scengine` | library (typeless); symbol prefix `sc_`, hidden visibility (shared builds) | **psx**, SDL3, SDL3_image, GLM (hdr), EnTT (hdr), Luau, (libcurl/libopus optional) |
 | `scgame` | library (typeless); the "lod" content module | scengine, **scdabas** |
 | `severed-chains` (host) | EXECUTABLE (thin) | scgame, scengine |
 | `severed-chains-launcher` / `-settings` / `-modmanager` / `-debugger` / `-inspector` | EXECUTABLE | scengine + Qt6 |
@@ -104,14 +104,14 @@ endif()
   3. Build with `-Werror` on the project sources.
   4. Link a TU that references a symbol with an EH personality → link
      failure expected (optional, toolchain-dependent).
-- Third-party: SDL3/EnTT/GLM/Luau/stb compile fine with exceptions disabled
+- Third-party: SDL3/SDL3_image/EnTT/GLM/Luau compile fine with exceptions disabled
   (verified in dependencies.md §3); Qt is the documented boundary.
 
 ## 3. Dependency Resolution
 
 - **Strategy:** `FetchContent` with pinned tags + SHA (no submodules, per
   requirement) for: GLM, EnTT (header-only), Luau (source build — its
-  `prebuilt/VM` via its CMake), stb_image (single file). This makes the
+  `prebuilt/VM` via its CMake), SDL3_image. This makes the
   clean-clone build self-contained given network access; CI mirrors
   (cache) for reproducibility.
 - **psx / scdabas:** no dependencies at all — nothing to fetch; they build
