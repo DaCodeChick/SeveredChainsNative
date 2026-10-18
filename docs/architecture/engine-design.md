@@ -1,0 +1,275 @@
+# Engine Design — Native C++23 Architecture
+
+Status: proposal (Phase 0). Backed by the source research in `docs/research/`.
+Goal: a clean, no-exceptions, C++23 engine that preserves Severed Chains'
+behavior while dropping the Java/ROM-mirroring organization.
+
+## 1. Module Layout (source tree)
+
+```
+CMakeLists.txt
+src/
+  engine/                    # reusable, LoD-agnostic (the "engine")
+    app/                     # App, MainLoop, Scheduler (Action equivalent), diagnostics
+    platform/                # SdlPlatform, Window, Input (actions/bindings/devices),
+                             #   Displays, Rumble, clipboard, URLs
+    gpu/                     # SdlGpuDevice wrapper, frame graph (command buffers,
+                             #   render passes, fences/cycling), pipeline cache,
+                             #   resource lifetimes (RAII over SDL_GPU handles)
+    render/                  # Renderer (frame structure), Batches, ModelPool,
+                             #   QueuedModel equivalents, TextureManager,
+                             #   Camera, post-processing, scissor stack
+    ps1/                     # REUSABLE PS1 TECH: Gte, GsState (Graphics equivalent),
+                             #   SoftwareGpu (Gpu.java port), VramTexture, Bpp,
+                             #   Tmd/Ctmd/Tim/Daba/Anm/CContainer/Mcq decoders,
+                             #   BpeDecompressor, Mrg/Deff archives, XaDecoder,
+                             #   TagSerializer, IsoReader
+    audio/                   # AudioDevice (SDL3 audio), MusicSynth (PS1 SPU seq
+                             #   synth port), Sfx (SPU port), XaStream,
+                             #   resampling, volume model
+    assets/                  # AssetManager (path chain: mod overrides → base),
+                             #   async loaders, cache, error results
+    ecs/                     # EnTT registry wrappers + component conventions
+                             #   (actors, cameras, renderables, animations)
+    script/                  # story-script VM (OpType port), script functions,
+                             #   fate compiler/patcher (tool)
+    save/                    # Tag format, SaveFile v10, migrations, mod data slots
+    config/                  # ConfigCollection (typed entries, presets, global)
+    events/                  # typed event bus (sync, cancelable, per-sender error
+                             #   isolation)
+    i18n/                    # lang keys + overrides
+    mod/                     # mod package format, manifest, discovery, load order,
+                             #   Luau VM host, native plugin host (see native-api)
+    util/                    # Result/Expected helpers, hashing, logging,
+                             #   math (GLM wrappers), pools, non-throwing IO
+  game/                      # LoD-specific ("game" — the native equivalent of LodMod
+                             #   + the decompiled game code)
+    content/                 # retail content registration: characters, stats,
+                             #   additions, items, equipment, spells, shops,
+                             #   encounters, campaigns, engine-state types,
+                             #   elements, input actions, configs  (the "lod mod")
+    title/ submap/ wmap/ battle/ inventory/ text/ credits/ fmv/
+    (each state: state object + tick/postScriptTick/overlayTick + save data)
+  tools/
+    qt/                      # Qt 6 desktop: launcher, settings, mod manager,
+                             #   debugger, asset inspector (see qt-integration.md)
+    fate/                    # fate CLI (disassemble/assemble/patch) — standalone
+  plugins/
+    examples/                # sample native plugins (C ABI consumers)
+tests/                       # unit + integration (see testing.md)
+gfx/shaders/                 # GLSL sources (ported from reference, renamed/organized)
+resources/                   # engine resources (fonts, UI art — non-copyrighted only)
+```
+
+**Boundary rule:** `src/engine/ps1` may contain anything generic-PS1 (decoders,
+GTE/GS, XA, BPE, Tag). `src/engine/` must not include `src/game/` headers.
+`src/game/` registers all content through the same mod API surface that third
+party mods use (see §6). Qt code (`src/tools/qt`) links engine but not game
+where possible; the debugger needs game introspection hooks (see qt-integration).
+
+## 2. Application Lifecycle & Main Loop
+
+```
+main()
+ └─ App::run(args)
+     ├─ Platform::init            # SDL_Init(VIDEO|GAMEPAD|AUDIO|...)
+     ├─ Diagnostics::init         # log init, crash handler, build info
+     ├─ Config::load (global)
+     ├─ Mods::discover + boot     # manifest validation, load order (deps),
+     │                            #   registries, events, i18n, input bindings
+     ├─ Gpu::init                 # SDL_CreateGPUDevice (see rendering doc)
+     ├─ Audio::init (device + synth/SFX threads)
+     ├─ Renderer::init (pipelines, targets, UI quads)
+     ├─ Game::boot                # "lod" content mod registers everything;
+     │                            #   lastSavableState tracking
+     └─ MainLoop::run             # see below
+```
+
+**MainLoop** (single-threaded game, mirrors the verified Java structure but with
+explicit sim/render separation):
+
+```
+while running:
+    Platform::pollEvents()          # SDL_PollEvent → Window/Input state
+    Scheduler::tickSim(now)         # fixed-rate sim ticks (30/60Hz per vsyncMode
+                                    #   and speed multiplier; see §3)
+        for each due sim tick:
+            Game::tick(simFrame)    # = gameLoop order: endFrame → GPU.startFrame
+                                    #   → timestamp → state.tick → events →
+                                    #   menus → scripts.tick → postScriptTick →
+                                    #   transitions → SFX start → textboxes →
+                                    #   overlayTick → GPU.endFrame
+    renderPending = needFrame()     # present when a sim tick produced output
+    if renderPending:
+        Renderer::renderFrame(...)  # game render callback (queue models) +
+                                    #   batches + post → swapchain
+        present
+```
+
+- The Java engine reprogrammed its 60Hz Action per frame; we keep the same
+  *semantics* (sim rate = `60 / vsyncMode * speedMultiplier`) with a clean fixed
+  step accumulator. Rendering runs at the display rate (vsync on); at 30Hz sim
+  we present the last simulated frame on the odd display frames (matching the
+  Java frame-skip presentation). Speed multipliers scale sim frequency exactly
+  like the original.
+- Threading: main thread = events + sim + render (like Java). Dedicated audio
+  thread (synth @120Hz + SFX mix @60TPS, ring buffers into SDL3 audio stream).
+  Async pool (std::jthread + task queue) for file loads/unpack, mirroring `Async`.
+- Shutdown: deterministic teardown order (reverse of init); all subsystems
+  implement `deinit() -> Result`; crash handler writes crash log + optional
+  recovery save (verified behavior in `Main.java`).
+
+## 3. Timing Contract (from verified Java behavior)
+
+- `vsyncMode` ∈ {1, 2, ...} (frames per game tick; 2 in most field states, 1 in
+  60Hz states) — part of engine state, affects `timestamp += vsyncMode` per tick.
+- Sim tick rate = 60 / vsyncMode Hz × speedMultiplier (1..16).
+- All combat timing (Addition windows, camera scripts, SEffe, effects) is in
+  **sim frames** — preserved exactly. Rendering never advances game state.
+- `timestamp_a0` / `tickCount` globals preserved as `GameState` fields (used by
+  scripts/effects).
+- Determinism: per-campaign RNG seed (port `simpleRandSeed` LCG + `legend.core
+  .Random` algorithm); same seed + same inputs → same sequence. Save stores seed.
+
+## 4. Core Subsystem Designs
+
+### 4.1 Resources & ownership
+
+- RAII wrappers over `SDL_GPU*` handles (`GpuBuffer`, `GpuTexture`, `GpuSampler`,
+  `GpuShader`, `GpuPipeline`, `CommandBuffer` scopes). No raw `SDL_Release*` in
+  game code.
+- **Upload ring**: one big `GpuTransferBuffer` ring (cycling) for per-frame data
+  (transform blocks, primitive params, CLUT animations, per-draw uniforms) +
+  an asset upload queue (async load → upload on next frame).
+- **Deferred destruction**: resources marked `deleteNextFrame` after the frame
+  that might still use them (mirrors `Obj.deleteObjects()`); backed by
+  `SubmitGPUCommandBufferAndAcquireFence` + fence tracking for correctness.
+- CPU-side pools: arena/stack allocators for per-frame model queues (no
+  per-frame heap churn); object pools for game entities.
+
+### 4.2 Events (engine bus)
+
+- Synchronous, typed: `EventBus::post<T>(T&&)`; listeners registered at mod
+  boot (registry-driven) or at runtime (Luau/native).
+- `CancelableEvent` semantics (first `cancel()` wins).
+- Per-listener error containment: a listener failure logs + isolates (no crash),
+  mirroring `onModError`.
+- Event list (ported from `legend.game.modding.events` — see modding-analysis):
+  render, engine-state change, battle lifecycle (start/end/turn/rewards/...),
+  input pressed/released, inventory, saves read/write, config, script flags,
+  submap/worldmap, character, etc. Names/types 1:1 with Java so mods port.
+
+### 4.3 Registries
+
+- `Registry<T>` keyed by `RegistryId{modId, entryId}` (string-based, stable).
+- Built-ins: character templates, stat types, stat mod types, elements, level-up
+  actions, additions, items, goods, equipment types, spells, shops, encounters,
+  DEFFs, post-battle actions, battle actions, battle entity types/stats,
+  element icons, campaign types, engine state types, input actions, config
+  entries, icons/atlas textures, script functions.
+- Mods (Luau or C++) register entries at boot; `lod` game module registers all
+  retail content. `RegistryDelegate`-style lazy registration preserved for
+  configs.
+
+### 4.4 ECS (EnTT) — where and how
+
+EnTT is used for **scene/entity management**, not engine services:
+
+- Registry per scene context (field scene, battle scene, world map, title):
+  actors (player party members, monsters, NPCs), scene objects (sobjs),
+  cameras, renderables (mesh + transform + material + queue pool slot),
+  animation state (ANM/TMD anim cursors), effects (SEffe-driven), particles.
+- Components (initial set): `Transform` (position/rotation/scale, float3),
+  `Mesh` (mesh handle + tpage/clut/texture refs), `Lit` (light params),
+  `Animated` (anim clip + frame), `Collider` (submap collision group),
+  `BattleEntity` (stats, turn state, flags), `Camera` (mode + scripted path),
+  `ScriptableObject` (script VM hook IDs), `RenderQueue` (pool + batch slot).
+- EnTT views process sim ticks in fixed order (transform → animation →
+  collision → camera → queue submission). EnTT's deferred destroy matches our
+  deferred destruction.
+- **EnTT stays out of the public plugin ABI** (requirement): plugins address
+  entities via `uint32` handles + capability queries through the C API (see
+  native-api.md).
+- Not forced into ECS: engine services (renderer, audio, assets, saves), the
+  battle state machine (explicit state objects with EnTT as their entity store),
+  UI screens (screen objects, not entities).
+
+### 4.5 Scripting (story VM)
+
+- Port of the original script VM: `OpType` set (YIELD, REWIND, WAIT, WAIT_CMP,
+  ...), `ScriptState` (1,522 lines — the core), param types (game vars, inline,
+  flags, registry IDs, storage, temp), tick-driven execution
+  (`SCRIPTS.tick()` returns whether anything ran).
+- Script *functions* (the `@ScriptDescription` mechanism) become registered
+  callable ops: `ScriptFunctionRegistry` — the game registers the same set as
+  Java; mods (Luau/native) can add functions (parity goal).
+- The VM is data-driven over `SECT/DRGN0.BIN/xxxx/1xxx` scripts (patched at
+  unpack time via the fate pipeline).
+
+### 4.6 Save system
+
+- `Tag` binary format ported byte-exact (V10); migration chain V8→V10.
+- Save file = campaign + version + config collection + engine state (type +
+  Tag payload via `EngineState::writeSaveData`) + DABA `Save60` (original save
+  card slot) + mod `ListTag` data (Read/WriteSaveData events).
+- Memory-card import (original `.mcr`/DABA) preserved.
+- Crash-recovery save preserved (config-gated).
+
+## 5. Configuration
+
+- Typed config entries (bool/int/float/enum/string/color/campaign-name) in a
+  registry; categories; storage location (global / campaign / per-save);
+  presets; keybinding entries (per-input-action, device, activation, mods,
+  deadzones).
+- Global `config.dcnf` (Tag-serialized — keep the name for user continuity).
+- Low-level `App` prefs (window size, fullscreen, monitor) in the same file.
+
+## 6. Game ↔ Mod Parity Strategy
+
+1. The native **`game/` module registers retail content exclusively through the
+   mod API** (registries + events + i18n + configs + script functions), exactly
+   as `LodMod` does in Java. This guarantees: (a) "total overhaul" mods can
+   replace `lod`; (b) every retail feature is reachable by mods by construction.
+2. Every in-game behavior with a mod hook in Java gets the same hook in native.
+3. Where Java lacks a hook (addition input evaluators — see modding-analysis
+   §2.4), native adds a *designed* seam (documented in luau-api.md) without
+   changing retail behavior.
+4. Content effects (item/effect lambdas in `LodItems`, battle actions) become
+   either data + registered C++ effect functions (retail) or Luau-provided
+   functions (mods) through one `EffectResolver` interface.
+
+## 7. Logging & Diagnostics
+
+- Structured logger (level, markers/tags like `INPUT`, `AUDIO_THREAD`, `SPU`,
+  `SCRIPT`, `ACTIONS` — port the marker scheme), console + rotating file
+  (`debug.log`), crash log with version/commit/timestamp + loaded mods (as in
+  Java's crash path).
+- Free-cam (port of RenderEngine free-cam) + debug keys (pause/frame-advance/
+  wireframe/reload-shaders) preserved in-engine; deep debuggers move to Qt 6
+  (qt-integration.md).
+- GPU debug: SDL3 GPU debug flag on dev builds; backend validation
+  (Vulkan layers, D3D12 debug layer, Xcode Metal capture) documented in
+  testing.md.
+
+## 8. Key Decisions & Tradeoffs
+
+| Decision | Rationale |
+|---|---|
+| Keep single-threaded sim+render (like Java) | The original game is frame-ordered; multi-threaded sim would change timing semantics for no gameplay benefit. Render can use multi-threaded command encoding later if profiling shows it matters. |
+| Port the software GS as an optional fidelity mode | Genuinely reusable PS1 tech; provides the most-faithful reference for parity testing of the modern path; small (≈1.6k LOC) and self-contained. |
+| EnTT only for scenes/entities | Requirement: don't force everything into ECS; keeps battle state machine explicit and debuggable. |
+| Content-as-mod for retail | Proven pattern (LodMod); makes overhaul mods and the "disable lod" workflow work; keeps engine clean. |
+| Byte-exact Tag saves | Users keep saves across the port; V10 is the current reference format. |
+| Sim/render decoupled but rate-locked to original vsyncMode | Preserves 30/60Hz timing + turbo while allowing high-refresh displays. |
+
+## 9. Risks
+
+1. Battle state machine port correctness (largest code, frame-exact timing) —
+   mitigated by milestone decomposition + golden tests (testing.md).
+2. Music synth fidelity — mitigated by A/B audio measurement against Java
+   output.
+3. SDL3 GPU API immaturity (3.2.0+ is young) — pin SDL version; fallback plan
+   per feature (e.g. if any-write depth proves problematic on a backend,
+   emulate linear depth without gl_FragDepth for that backend, documented).
+4. External tooling deps for shaders (glslang/SPIRV-Cross/DXC) — see
+   dependencies.md (approval needed).
