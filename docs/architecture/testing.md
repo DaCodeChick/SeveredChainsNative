@@ -62,8 +62,8 @@ measurements; propose tools only when necessity is established.
   corruption — golden data check); stress: 10k create/destroy cycles.
 - TSAN run of the audio thread + async loader (dedicated CI job).
 
-### 2.5 Asset decoding (psx/ formats — scpsx, standalone)
-- Runs in the standalone `sc-tests-psx` target (links scpsx only — the full
+### 2.5 Asset decoding (psx/ formats — `psx` library, standalone)
+- Runs in the standalone `psx-tests` target (links `psx` only — the full
   suite, incl. GTE/GS goldens, is §2.11). **Round-trip tests per decoder**
   with synthetic + reference fixtures:
   BPE (compress→decompress identity on known data; the decompressor on a
@@ -154,9 +154,9 @@ measurements; propose tools only when necessity is established.
   (→ skip + report), duplicate ids, load order determinism (alphabetical +
   dependency order, golden test).
 
-### 2.11 PSX library (scpsx) — standalone golden suite
+### 2.11 PSX library (`psx`) — standalone golden suite
 
-`sc-tests-psx` links **scpsx only** (no engine/SDL/Qt) — the fastest test
+`psx-tests` links **`psx` only** (no engine/SDL/Qt) — the fastest test
 surface in the repo, and the parity backbone (psx-library.md):
 - **GTE math**: every op (RTPS/NCLIP/NCCS/AVSZ/MAC3/... ) against Java
   `Gte` outputs for a fixed input matrix (exact 32-bit integer equality —

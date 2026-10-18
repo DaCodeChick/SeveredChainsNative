@@ -155,16 +155,18 @@ Host-side responsibilities (all in `Dabas` adapter, verified):
 
 ## 5. Integration recommendation (native)
 
-**Decision: a separate C++23 static library target (`scdabas`) inside the
-native repo, linked into the game module. Not a plugin; not a DLL; not
-part of `scengine`; not part of the PSX library.**
+**Decision: a separate C++23 library target (`scdabas`) inside the native
+repo, linked into the game module — built SHARED by default (owner DLL
+preference; `SC_BUILD_STATIC=ON` for a static build; nothing
+functionally *requires* a DLL). Not a plugin; not part of `scengine`; not
+part of the prefix-free `psx` library.**
 
 Rationale:
 1. **Parity with the reference architecture:** the Java project keeps it a
    separate artifact (`mogul-dabas`) integrated by a thin host adapter.
    The native equivalent is a separate *target* in one repo (we have no
-   separate-repo requirement; one repo, many targets — engine / game /
-   dabas / tools).
+   separate-repo requirement; one repo, many targets — psx (root subproject)
+   / engine / game / dabas / tools).
 2. **First-party retail content, not a mod** → it does not belong in the
    plugin system (plugins are third-party extension; also the plugin ABI
    is for external code with a stability contract — the minigame can
@@ -173,10 +175,11 @@ Rationale:
    PlayStation system; the psx library (psx-library.md) must not absorb
    it. (The PS1 itself runs this game *as data*; the VM is a game
    mechanic, like a character in a minigame box.)
-4. **Static link, in-process:** the host adapter needs per-frame pixel/
-   audio/input callbacks with zero IPC; a static lib in the same process
-   is the simplest correct boundary. (Task's "do not assume it requires a
-   DLL" — agreed: static is right.)
+4. **Same-process link (shared by default):** the host adapter needs
+   per-frame pixel/audio/input callbacks with zero IPC; a same-process
+   library is the simplest correct boundary. The original task said "do
+   not assume it requires a DLL" — respected: nothing *requires* a DLL;
+   shared is just the default build form (SC_BUILD_STATIC opts out).
 5. **Testability:** the console has no SDL/Qt dependency (pixels are an
    `int[32]`, audio is a byte callback, time is injectable) — the native
    `scdabas` keeps that: pure C++23, driven by a host interface; a headless
@@ -185,7 +188,7 @@ Rationale:
 
 Proposed shape:
 ```
-libs/dabas/
+src/libs/dabas/
   include/dabas/
     hardware.hpp     // Console (timers, RTC, interrupts, power, DAC, framebuffer)
     host.hpp         // DabasHost interface (tick, fps, audio, save, shutdown)

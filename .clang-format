@@ -63,5 +63,5 @@ SortUsingDeclarations: true
 SpaceAfterCStyleCast: false
 SpaceBeforeCpp11BracedList: false
 SpaceInEmptyParentheses: false
-Standard: c++23
+Standard: latest
 UseCRLF: false

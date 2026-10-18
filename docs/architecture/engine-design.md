@@ -8,6 +8,14 @@ behavior while dropping the Java/ROM-mirroring organization.
 
 ```
 CMakeLists.txt
+psx/                         # INDEPENDENT reusable PS1 library — target `psx`,
+                             #   namespace psx::, PREFIX-FREE (no Sc/SC/sc), zero
+                             #   deps, shared by default, compiles standalone;
+                             #   self-contained subproject, may be extracted to its
+                             #   own repo. gte, gpu (+ software reference
+                             #   rasterizer), spu, xa, sssq, cdrom, tmd, tim, anm,
+                             #   archive (MRG/DEFF), bpe, tag, script (dis/asm).
+                             #   See psx-library.md.
 src/
   engine/                    # reusable, LoD-agnostic (the "engine")
     app/                     # App, MainLoop, Scheduler (Action equivalent), diagnostics
@@ -54,18 +62,14 @@ src/
     title/ submap/ wmap/ battle/ inventory/ text/ credits/ fmv/
     (each state: state object + tick/postScriptTick/overlayTick + save data)
   libs/
-    psx/                     # scpsx — INDEPENDENT reusable PS1 tech (zero deps,
-                             #   no SDL/Qt/game): gte, gpu (+ software reference
-                             #   rasterizer), spu, xa, sssq, cdrom, tmd, tim, anm,
-                             #   archive (MRG/DEFF), bpe, tag, script (dis/asm) —
-                             #   see psx-library.md
     dabas/                   # scdabas — Mogul Dabas handheld console + minigame
-                             #   logic port (no SDL/Qt; host-interface driven)
+                             #   logic port (no SDL/Qt; host-interface driven,
+                             #   shared by default)
   tools/
     qt/                      # Qt 6 desktop: launcher, settings, mod manager,
                              #   debugger, asset inspector (see qt-integration.md)
     fate/                    # fate CLI (disassemble/assemble/patch) — standalone,
-                             #   links scpsx::script + the fate compiler
+                             #   links psx::script + the fate compiler
   plugins/
     examples/                # sample native plugins (C++23 SDK consumers)
 tests/                       # unit + integration (see testing.md)
@@ -73,12 +77,14 @@ gfx/shaders/                 # GLSL sources (ported from reference, renamed/orga
 resources/                   # engine resources (fonts, UI art — non-copyrighted only)
 ```
 
-**Boundary rules:** `libs/psx` (scpsx) is dependency-free (C++23 standard only) and
-never includes engine, game, SDL, Qt, or Luau headers — it compiles standalone.
-`libs/dabas` depends on nothing but the C++ standard (host-interface driven). `src/
-engine/` must not include `src/game/` headers; both may include `libs/psx`. The
-engine links scpsx for the legacy/VRAM render modes (psx::gpu), GTE camera math
-(psx::gte), SPU/XA/SSSq audio (M5), and decoders (M6). `src/game/` registers all
+**Boundary rules:** `psx/` (target `psx`) is dependency-free (C++23 standard only)
+and never includes engine, game, SDL, Qt, or Luau headers — it compiles
+standalone and is prefix-free by design (independent project identity,
+psx-library.md). `libs/dabas` depends on nothing but the C++ standard
+(host-interface driven). `src/engine/` must not include `src/game/` headers;
+both may include `psx/`. The engine links `psx` for the legacy/VRAM render
+modes (psx::gpu), GTE camera math (psx::gte), SPU/XA/SSSq audio (M5), and
+decoders (M6). `src/game/` registers all
 content through the same mod API surface that third party mods use (see §6).
 `psx::` types never cross the plugin boundary or the Luau API (native-api.md §1,
 luau-api.md §7). Qt code (`src/tools/qt`) links engine but not game

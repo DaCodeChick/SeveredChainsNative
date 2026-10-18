@@ -1,6 +1,6 @@
 # PSX Library — Reusable PlayStation 1 Technology
 
-**Decision: an independent C++23 static library (`scpsx`, namespace
+**Decision: an independent C++23 library (CMake target `psx`, namespace
 `psx::`) is part of the native architecture.** It is the home for
 PS1-specific technology that is reusable across PlayStation game projects
 (this project, and potentially e.g. *Legend of Legaia*), kept strictly
@@ -8,6 +8,15 @@ separate from Legend of Dragoon game logic, Qt, and SDL3 GPU rendering.
 It is **not** a PS1 emulator: it provides *semantics* (math, decoding,
 state machines) and one software reference rasterizer — not CPU, timing,
 or full-system emulation.
+
+**Identity (owner decision):** the library is **prefix-free — no Sc/SC/sc
+in any of its names** (target `psx`, produced `psx.dll` / `libpsx.so` /
+`psx.dylib`, namespace `psx::`, source dir `psx/` at the repository root).
+It is a separate project identity from Severed Chains today and may be
+extracted to its own repository in the future; the root-level placement
+keeps that extraction mechanical. **Build form:** shared by default (DLL
+preference), with a CMake option (`SC_BUILD_STATIC=ON`) for a static build
+— build-system.md §1.
 
 ## 1. Boundary
 
@@ -25,14 +34,14 @@ or full-system emulation.
 | CD-Rom sector I/O abstractions (read at LBN, multi-sector) | — |
 
 **Independence rules (mandatory):**
-- `scpsx` has **zero third-party dependencies** (C++23 standard library
+- `psx` has **zero third-party dependencies** (C++23 standard library
   only). It defines its own fixed-point geometry types (MV/VC/SS/DV
   structs mirroring the GTE register semantics) rather than using GLM,
   so the library stays usable in any context (tools, tests, embedders).
-- No SDL, no Qt, no Luau, no engine headers. `scpsx` compiles standalone
+- No SDL, no Qt, no Luau, no engine headers. `psx` compiles standalone
   (own target, own tests) — a hard build-system rule (build-system.md).
 - No LoD strings, no `lod:` registry ids, no save-schema knowledge.
-- Threading: `scpsx` is thread-*agnostic* — decoders are pure functions on
+- Threading: `psx` is thread-*agnostic* — decoders are pure functions on
   input buffers; the rasterizer is single-context. Callers own
   synchronization (engine does).
 
@@ -68,7 +77,7 @@ seen by Luau (luau-api.md).
    project with zero engine/SDL/Qt dependencies can be dropped into the
    next PS1 port unchanged — decoders, GTE math, and the GS reference
    rasterizer are exactly the pieces a *Legaia* port would share.
-2. **Testing independence**: `scpsx` tests run with no windowing, no
+2. **Testing independence**: `psx` tests run with no windowing, no
    device, no game data directory — pure buffer-in/buffer-out golden
    tests (the fastest, most reliable test target in the repo).
 3. **Layering**: `scengine` (SDL3 GPU, audio threads, assets) and `game`
@@ -90,7 +99,7 @@ seen by Luau (luau-api.md).
 | `libs/dabas/` | **none** (the Dabas handheld is not PS1 hardware — deliberate) |
 | plugins / Luau | **none directly** — engine services expose *results*, never `psx::` types (ABI boundary stays clean) |
 
-## 5. Conventions applied to scpsx
+## 5. Conventions applied to psx
 
 - C++23, no exceptions (`-fno-exceptions` target flag — build-system.md),
   `std::expected<T, psx::Error>` results for all fallible operations
@@ -113,12 +122,12 @@ seen by Luau (luau-api.md).
 ## 6. Migration mapping (from scengine's original plan)
 
 Phase 0's engine design assumed these pieces lived in `scengine/ps1/`;
-they move to `scpsx`:
-- `scengine/ps1/gte` → `scpsx` (gte)
-- `scengine/ps1/gpu` (software GS) → `scpsx` (gpu)
+they move to `psx`:
+- `scengine/ps1/gte` → `psx` (gte)
+- `scengine/ps1/gpu` (software GS) → `psx` (gpu)
 - `scengine/ps1/decoders` (BPE/MRG/DEFF/TMD/TIM/ANM/XA/SShd/SSSq/ISO9660/
-  Tag) → `scpsx` (per module above)
-- `scengine/ps1/spu` (voice model) → `scpsx` (spu); audio *scheduling*
+  Tag) → `psx` (per module above)
+- `scengine/ps1/spu` (voice model) → `psx` (spu); audio *scheduling*
   stays `scengine::audio`
 - **Stays in scengine:** the R32UI/RGBA8 upload layouts, the 120 Hz music
   synth scheduler, the SFX voice *allocation* policy (LoD's Spu), the

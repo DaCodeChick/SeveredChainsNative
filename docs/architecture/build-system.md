@@ -10,38 +10,58 @@ engine library + thin host; Debug/Release configurations; packaging.
 
 ```
 CMakeLists.txt                # root: project(), C++23, options, subdirs
+psx/                          # reusable PS1 library — target `psx`, namespace psx::.
+                              #   PREFIX-FREE (no Sc/SC/sc), ZERO deps, compiles
+                              #   standalone; a self-contained subproject that may
+                              #   be extracted into its own repo. See psx-library.md
 cmake/
-  ScToolchain.cmake           # compiler flags, exception policy, sanitizers
+  ScToolchain.cmake           # compiler flags, exception/RTTI policy, sanitizers,
+                              #   + SC_BUILD_STATIC (shared-vs-static) wiring
   ScDeps.cmake                # dependency resolution (FetchContent/vcpkg/Qt6)
   ScShader.cmake              # shader build rules (glslang/spirv-cross/dxc)
   ScPackaging.cmake           # install rules, bundle layout
   versions.cmake              # pinned versions (single source of truth)
-src/engine/CMakeLists.txt     # scengine (SHARED) + scengine-internal
-src/game/CMakeLists.txt       # scgame (links scengine; the "lod" content lives here)
-src/libs/psx/CMakeLists.txt   # scpsx (STATIC, ZERO deps — compiles standalone)
-src/libs/dabas/CMakeLists.txt # scdabas (STATIC, std-only — the Mogul Dabas minigame)
+src/engine/CMakeLists.txt     # scengine (shared by default; static via SC_BUILD_STATIC)
+src/game/CMakeLists.txt       # scgame (shared by default; the "lod" content lives here)
+src/libs/dabas/CMakeLists.txt # scdabas (shared by default, std-only — the Mogul Dabas minigame)
 src/sdk/CMakeLists.txt        # sc-sdk (plugin SDK: frozen headers + toolchain file)
 src/tools/qt/CMakeLists.txt   # launcher, settings, modmanager, debugger, inspector
-src/tools/fate/CMakeLists.txt # fate CLI (pure C++, no Qt; links scpsx only)
+src/tools/fate/CMakeLists.txt # fate CLI (pure C++, no Qt; links psx only)
 src/plugins/examples/         # sample plugin (SHARED, C++23 SDK consumer)
-tests/                        # minimal in-repo test runner (no new dep) — see
-                              #   testing.md; tests/psx/ is a standalone target
-                              #   that links scpsx only
+tests/                        # minimal in-repo test runner (no new dep) — see testing.md
+psx/tests/                    # psx standalone tests (target `psx-tests`, links psx only)
 ```
+
+**Build form — shared vs static (owner preference):** project-owned
+libraries (`psx`, `scengine`, `scgame`, `scdabas`) build as **shared
+libraries (DLLs) by default**. A single CMake option selects static:
+
+```cmake
+# OFF (default): shared/.dll/.so/.dylib   ON: static archives
+option(SC_BUILD_STATIC "Build project-owned libraries STATIC instead of the SHARED default" OFF)
+```
+
+Applied uniformly by a small `sc_add_library(<name> ...)` helper in
+`ScToolchain.cmake` (picks `SHARED`/`STATIC` from the option, then applies
+`sc_noexcept`/`sc_nortti` and visibility flags). The sample plugin and the
+host executable are unaffected (always shared/executable). Note the
+exception: `scgame` may be compiled into the host in a fully static build
+— the default is a shared `scgame` DLL.
 
 **Targets:**
 | Target | Type | Links |
 |---|---|---|
-| `scpsx` | STATIC (**zero third-party deps**; no SDL/Qt/Luau/engine) | C++23 std only |
-| `scdabas` | STATIC (std only; host-interface driven) | C++23 std only |
-| `scengine` | SHARED (dynamic symbol prefix `sc_`, hidden visibility) | **scpsx**, SDL3, GLM (hdr), EnTT (hdr), Luau, stb_image, (libcurl/libopus optional) |
-| `scgame` | STATIC (compiled into the host; the "lod" content module) | scengine, **scdabas** |
+| `psx` | **SHARED by default** (STATIC if `SC_BUILD_STATIC=ON`); **prefix-free**, **zero third-party deps**; no SDL/Qt/Luau/engine | C++23 std only |
+| `scdabas` | SHARED by default (static option); std only; host-interface driven | C++23 std only |
+| `scengine` | SHARED by default (static option); dynamic symbol prefix `sc_`, hidden visibility | **psx**, SDL3, GLM (hdr), EnTT (hdr), Luau, stb_image, (libcurl/libopus optional) |
+| `scgame` | SHARED by default (static option); the "lod" content module | scengine, **scdabas** |
 | `severed-chains` (host) | EXECUTABLE (thin) | scgame, scengine |
 | `severed-chains-launcher` / `-settings` / `-modmanager` / `-debugger` / `-inspector` | EXECUTABLE | scengine + Qt6 |
-| `fate` | EXECUTABLE | **scpsx** (script/fate parts — no engine needed) + in-repo fate compiler |
+| `fate` | EXECUTABLE | **psx** (script/fate parts — no engine needed) + in-repo fate compiler |
 | `sc-sdk` | INTERFACE (plugin SDK headers + toolchain file + engine import lib) | — (consumers link scengine) |
 | `scplugin_example` | SHARED (plugin, **C++23 against sc-sdk**) | scengine (via SDK import lib) |
-| `sc-tests`, `sc-fuzz` | EXECUTABLE | per testing.md (`sc-tests-psx` links scpsx only) |
+| `sc-tests`, `sc-fuzz` | EXECUTABLE | per testing.md |
+| `psx-tests` | EXECUTABLE (standalone subproject) | psx only |
 | `sc-api-docs` | CUSTOM (doxygen over engine + psx + SDK public headers → `docs/api/`) | — |
 
 ## 2. Exception- & RTTI-Disabled Enforcement (the core requirement)
@@ -59,7 +79,7 @@ else()
 endif()
 target_compile_features(sc_noexcept INTERFACE cxx_std_23)
 
-# Public API targets (scpsx, scengine public, sc-sdk) additionally:
+# Public API targets (psx, scengine public, sc-sdk) additionally:
 add_library(sc_nortti INTERFACE)
 target_link_libraries(sc_nortti INTERFACE sc_noexcept)
 if(MSVC)
@@ -69,7 +89,7 @@ else()
 endif()
 ```
 - Every target: `target_link_libraries(<t> PRIVATE sc_noexcept)`; the
-  **public API targets** (`scpsx`, `sc-sdk`) additionally link `sc_nortti`
+  **public API targets** (`psx`, `sc-sdk`) additionally link `sc_nortti`
   (AGENTS.md: no RTTI across public API boundaries — the plugin API and
   engine public headers never `dynamic_cast`).
 - **Qt bridge exception:** `qtbridge` sources (the narrow C-shim TUs,
@@ -95,10 +115,11 @@ endif()
   `prebuilt/VM` via its CMake), stb_image (single file). This makes the
   clean-clone build self-contained given network access; CI mirrors
   (cache) for reproducibility.
-- **scpsx / scdabas:** no dependencies at all — nothing to fetch; they build
+- **psx / scdabas:** no dependencies at all — nothing to fetch; they build
   from their own sources only (psx-library.md §1 is a hard build rule:
-  a CMake audit target fails the build if scpsx/scdabas link anything but
-  the C++ standard library).
+  a CMake audit target fails the build if psx/scdabas link anything but
+  the C++ standard library). `psx` lives at the repo root (`psx/`) and is
+  prefix-free by design.
 - **SDL3:** platform package manager preferred (avoids building SDL from
   source): vcpkg (Windows) with pinned port version; system/brew (Linux/macOS)
   via `find_package(SDL3)`. Fallback: FetchContent SDL3 source build (slower,
@@ -181,7 +202,8 @@ cmake --build build
 - **Install layout (prefix):**
   ```
   bin/               # host + tools
-  lib/               # scengine(.dll/.so/.dylib), (Qt shared by system)
+  lib/               # scengine, psx, scgame, scdabas (.dll/.so/.dylib by default),
+                     #   (Qt shared by system)
   resources/         # shaders (compiled), fonts, UI art (non-copyrighted)
   share/             # gamecontrollerdb.txt (SDL game controller db — shipped
                      #   like the Java project), default configs
@@ -192,7 +214,7 @@ cmake --build build
 
 - Matrix: Windows (MSVC + clang-cl), Ubuntu (GCC + Clang), macOS (arm64 +
   x86_64 runners if available).
-- Jobs: build (all targets) → unit tests (incl. `sc-tests-psx` standalone)
+- Jobs: build (all targets) → unit tests (incl. `psx-tests` standalone)
   → **SDK compile probes** (throw/rtti on SDK headers; frozen-layout
   `static_assert` probe vs previous SDK) → **oldest-plugin matrix** (sample
   plugin built against SDK v1 loads on current engine; wrong-toolchain

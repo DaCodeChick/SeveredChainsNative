@@ -63,15 +63,16 @@ flag on dev builds, resource RAII wrappers + deferred-deletion scaffold,
 fence-based correctness (submit + fence wait).
 
 **Prerequisites:** M1; **G2** (PNG for the test quad); shader tools or a
-single hand-compiled test shader per backend. **Also starts `scpsx`**
-(psx-library.md): the independent PSX library target lands now with its
+single hand-compiled test shader per backend. **Also starts the `psx`
+library** (psx-library.md): the independent, prefix-free PSX library
+target (root subproject, shared by default) lands now with its
 first modules (`psx::bpe`, `psx::xa`, `psx::tag`, `psx::gte`) so the
 golden suite (testing.md §2.11) is green from the library's first commit —
-scpsx is dependency-free and needs no GPU/SDL, so it proceeds in parallel
+it is dependency-free and needs no GPU/SDL, so it proceeds in parallel
 with the graphics work.
 **Deliverables:** `scengine` GPU layer; test scene rendering on the
-default backend; pipeline-creation smoke test infrastructure; `scpsx`
-target + initial modules + standalone `sc-tests-psx`.
+default backend; pipeline-creation smoke test infrastructure; `psx`
+target + initial modules + standalone `psx-tests`.
 **Acceptance:**
 - Textured quad + triangle render correctly on at least Vulkan (Linux),
   Metal (macOS), D3D12 (Windows) — with SPIR-V-only artifacts acceptable
@@ -209,7 +210,7 @@ invalidation + restore-on-deletion (parity with `ScriptPatcher`). The
 `fate` *CLI tool* is M12; the pipeline itself is M6.
 
 **Prerequisites:** M5 (loader feeds sim), G3.
-**Deliverables:** scpsx decoder suite complete (psx-library.md §2) +
+**Deliverables:** psx decoder suite complete (psx-library.md §2) +
 `assets/` manager; unpack CLI path (first-run unpacker with status
  callback — port of the `Unpacker` UX: wait-for-discs, per-file transform
 progress, version file); **fate patch pipeline** (applied to the shipped
@@ -219,7 +220,7 @@ asset error taxonomy live (specific Status per malformed class).
 - Unpack a real 4-disc set (opt-in data) → `files/` tree **byte-identical**
   to the Java unpacker output (tree diff; version file matches) — **incl.
   the fate-patched script tree** (all `scripts.csv` entries applied).
-- Decoder golden tests (scpsx standalone suite — synthetic + real fixtures,
+- Decoder golden tests (`psx` standalone suite — synthetic + real fixtures,
   testing.md §2.11) all pass; every malformed-class → specific Status.
 - Load-time: all title-screen assets load (fonts, UI png, title TMDs,
   shadow model, save card textures) with async completion tracking.
@@ -246,7 +247,7 @@ quads (MCQ menus, line/quad/poly builders), TMD/CTMD model rendering
 in-shader scissor, post/`screen` shader (full CRT chain + turn_order_bounds
 hook — the mod uniform is exposed now so M10+ mods can use it), **software
 GS fidelity mode** (the `Gpu`+`Graphics` software rasterizer runs from
-**`psx::gpu`** — the port lands in M7 as part of scpsx; legacy path +
+**`psx::gpu`** — the port lands in M7 as part of the `psx` library; legacy path +
 `worldToScreenMatrix` usage — the parity
 reference oracle), free-cam + debug keys (pause/frame-advance/wireframe/
 shader-reload; render-mode TAB cycling: OpenGL/legacy/VRAM), Discord

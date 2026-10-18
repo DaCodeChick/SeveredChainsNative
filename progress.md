@@ -47,22 +47,25 @@ layout**).
 
 ### 2. Reusable PSX library added to the architecture
 
-New doc `docs/architecture/psx-library.md`: an independent C++23 static
-library **`scpsx` (namespace `psx::`), zero third-party deps, no
-SDL/Qt/game logic, not a PS1 emulator**. Modules (all verified against
+New doc `docs/architecture/psx-library.md`: an independent C++23 library
+**`psx` (target `psx`, namespace `psx::`) — prefix-free (no Sc/SC/sc;
+independent identity, may be extracted to its own repo), zero third-party
+deps, no SDL/Qt/game logic, not a PS1 emulator, SHARED by default
+(`SC_BUILD_STATIC=ON` for a static build)**. Modules (all verified against
 reference source): `psx::gte` (GTE math), `psx::gpu` (PS1 GS/GPU
 semantics + the software reference rasterizer — parity oracle + legacy/
 VRAM render modes), `psx::spu` (SPU voice model), `psx::xa` (XA ADPCM),
 `psx::sssq` (SShd/SSSq parse), `psx::cdrom` (ISO 9660 Level 1),
 `psx::tmd`/`tim`/`anm`/`archive` (MRG/DEFF)/`bpe`/`tag` (the generic
 PS1-era formats). LoD-only containers (CContainer/MCQ/CMB) stay in
-`game/`; the Dabas handheld is **not** PS1 hardware → `libs/dabas`, not
-`scpsx`. Build rule: `scpsx` compiles standalone (no engine/SDL/Qt/Luau).
-Updated: engine-design.md (module tree + boundary rules), build-system.md
-(`scpsx`/`scdabas` targets, standalone test target, CMake dependency
-audit), dependencies.md (in-repo zero-dep libraries), testing.md (§2.11
-scpsx standalone golden suite), roadmap.md (scpsx starts M2, completes M6,
-rasterizer M7).
+`game/`; the Dabas handheld is **not** PS1 hardware → `src/libs/dabas`
+(target `scdabas`), not the `psx` library. Build rule: `psx` compiles
+standalone (no engine/SDL/Qt/Luau). Updated: engine-design.md (module
+tree + boundary rules), build-system.md (`psx`/`scdabas` targets,
+shared-by-default + `SC_BUILD_STATIC`, standalone test target, CMake
+dependency audit), dependencies.md (in-repo zero-dep libraries),
+testing.md (§2.11 psx standalone golden suite), roadmap.md (psx starts
+M2, completes M6, rasterizer M7).
 
 ### 3. Native plugin API corrected: **C++23, not a C ABI**
 
@@ -129,13 +132,13 @@ library.md`, `.clang-format`.
 analysis.md` (verified mod-loader/fate/i18n semantics; C++ API; open
 questions resolved), `docs/research/licensing.md` (3 repos AGPL verified;
 copyleft note updated), `docs/architecture/native-api.md` (full rewrite),
-`docs/architecture/engine-design.md` (module tree: libs/psx, libs/dabas,
-sdk; boundary rules; C++ plugin API), `docs/architecture/luau-api.md`,
+`docs/architecture/engine-design.md` (module tree: psx (root subproject),
+libs/dabas, sdk; boundary rules; C++ plugin API), `docs/architecture/luau-api.md`,
 `docs/architecture/error-handling.md`, `docs/architecture/build-system.md`
 (targets, sc-sdk, RTTI probes, doxygen target, CI), `docs/architecture/
 dependencies.md` (in-repo zero-dep libs; ANTLR4-C++ decision row),
-`docs/architecture/testing.md` (§2.5 scpsx; §2.9 C++23; new §2.11–2.13;
-renumbered), `docs/architecture/roadmap.md` (M2 scpsx start; M5 psx audio;
+`docs/architecture/testing.md` (§2.5 psx; §2.9 C++23; new §2.11–2.13;
+renumbered), `docs/architecture/roadmap.md` (M2 psx start; M5 psx audio;
 M6 decoders + **fate patch pipeline moved to M6** (verified: it runs at
 unpack time); M7 psx::gte/gpu; M8 **Mogul Dabas**; M10 C++23 SDK; M12 fate
 CLI).
@@ -153,6 +156,42 @@ CLI).
 - Event dispatch: exact-class match + 5-tier priority + critical/non-
   critical error split verified (prior doc: "ordered listeners" only).
 - "Script-Decompiler" = `Script-Recompiler` (actual directory name).
+
+### 8. Post-follow-up revisions (owner preferences, 2026-10-18)
+
+Two owner decisions refined the follow-up deliverables (docs updated in
+place; no new files):
+
+1. **Naming — acronyms fully capitalized + PascalCase methods.** In
+   PascalCase identifiers, acronyms are fully capitalized: `EngineAPI`,
+   `GameplayAPI`, `XADecoder`, `GTEView`, `SFXVoice`, `DecompressBPE`
+   (never `EngineApi`/`XaDecoder`). Struct/class **methods are PascalCase**
+   (`OnLoad`, `QueryTable`, `Subscribe`, `EntitySpawn`), like free
+   functions; camelCase stays for variables/parameters/private fields.
+   C-linkage discovery symbols: PascalCase with `Sc` prefix
+   (`ScPluginCreateV1`). `Id`/`Ids` treated as a word (matches the
+   reference project's `RegistryId`/`modId`). Applied: AGENTS.md
+   conventions table (examples + rules), native-api.md (full rename of all
+   interfaces/methods), luau-api.md, roadmap.md, testing.md, psx-library.md
+   (conventions section), progress.md. Third-party names (SDL_*, luau_*,
+   Qt, verbatim Java citations) preserved.
+2. **Build form — shared (DLL) by default, static option.** Owner prefers
+   DLLs over static libraries, as a CMake option: new `SC_BUILD_STATIC`
+   option (default OFF) — project-owned libraries `psx`, `scengine`,
+   `scgame`, `scdabas` build SHARED by default, STATIC when ON (applied via
+   a `sc_add_library` helper; build-system.md §1). Sample plugin stays
+   SHARED.
+3. **PSX library is prefix-free.** The reusable PSX library must not carry
+   the project prefix — it is separate from Severed Chains (and may become
+   its own project): target `psx` (was `scpsx`), namespace `psx::` (unchanged),
+   produced `psx.dll`/`libpsx.so`/`psx.dylib`, moved to a **root-level
+   `psx/` subproject** (was `src/libs/psx`) so future extraction is
+   mechanical. Its test target is `psx-tests` (was `sc-tests-psx`).
+   `scdabas` keeps its prefix (LoD-specific first-party content). Updated:
+   psx-library.md (identity + build form), build-system.md (layout, option,
+   targets, CI, packaging), engine-design.md (tree + boundaries),
+   testing.md, roadmap.md, dependencies.md, AGENTS.md, dig-dabas.md §5
+   (shared-by-default framing).
 
 ## Completed Research (Phase 0 original, unchanged)
 
@@ -202,8 +241,9 @@ supersede the specific items listed in §7.
 
 ## Architectural Decisions (final, Phase 0 + follow-up)
 
-- Engine shared lib (`scengine`) + thin host; **`scpsx` (PSX tech) +
-  `scdabas` (minigame) as independent zero-dep libraries**; game content
+- Engine shared lib (`scengine`) + thin host; **`psx` (PSX tech — prefix-free,
+  independent identity) + `scdabas` (minigame) as zero-dep libraries, SHARED by
+  default (`SC_BUILD_STATIC` option)**; game content
   module registers everything through the mod API (LodMod pattern).
 - Sim/render decoupled, rate-locked to original vsyncMode × speed.
 - SDL3 GPU only; GLSL 450 → SPIR-V (glslang) → MSL (SPIRV-Cross) → DXIL
@@ -261,7 +301,7 @@ supersede the specific items listed in §7.
 1. Confirm approval gates (G1/G2 + the fate-compiler decision at minimum).
 2. Milestone 1: CMake skeleton + sc_noexcept/sc_nortti + SDL3 platform/
    window/input + config + diagnostics + shutdown; 3-OS matrix in CI.
-3. In parallel: start `scpsx` (M2 scope) — dependency-free, golden-gated.
+3. In parallel: start the `psx` library (M2 scope) — dependency-free, golden-gated.
 4. Golden-generation setup with the user (for M5+ fixtures).
 </content>
 </invoke>

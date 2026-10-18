@@ -126,13 +126,16 @@ Severed Chains' enhancements and modding capabilities.
 - **PSX library (reusable PlayStation 1 tech, independent):** GTE math, PS1 GPU/GS
   semantics + software reference rasterizer, SPU voice model, XA/SShd/SSSq decoding,
   ISO 9660 (PS1) reading, TMD/TIM/ANM/MRG/DEFF/BPE/Tag formats — zero third-party
-  deps, no SDL/Qt/game logic (psx-library.md). Consumed by engine, game, and tools.
+  deps, no SDL/Qt/game logic (psx-library.md). **Prefix-free identity** (target
+  `psx`, namespace `psx::` — no Sc/SC/sc; it may be extracted to its own repo),
+  root-level subproject, shared by default. Consumed by engine, game, and tools.
 - **Engine (reusable):** platform/lifecycle, SDL3 GPU rendering, input, audio, assets,
   scene/ECS, animation, save serialization, scripting host, native plugin host, timing.
 - **Game (LoD-specific):** characters, combat, Additions, dialogue/events, submaps,
   world map, saves content, retail registries — the equivalent of the Java `lod` mod.
-- **Mogul Dabas minigame:** separate C++23 static library (`libs/dabas`) for the
-  original in-game handheld minigame; first-party content, not a plugin, not PSX
+- **Mogul Dabas minigame:** separate C++23 library (`src/libs/dabas`, target
+  `scdabas`; shared by default, static via `SC_BUILD_STATIC`) for the original
+  in-game handheld minigame; first-party content, not a plugin, not PSX
   hardware (dig-dabas.md §5).
 - **Desktop tools (Qt 6):** launcher, mod manager, asset inspection, debuggers.
 - **Native plugin API:** **C++23 interface (not a C ABI)** — C-linkage discovery
@@ -157,8 +160,9 @@ Severed Chains' enhancements and modding capabilities.
   (Windows, Linux, macOS/Apple Silicon).
 - All project-owned targets built with exceptions disabled (see above); public API
   targets additionally built with RTTI disabled (see above).
-- `scpsx` compiles standalone (no engine/SDL/Qt/Luau dependencies) — enforced by the
-  build system (build-system.md).
+- `psx` compiles standalone (no engine/SDL/Qt/Luau dependencies) — enforced by the
+  build system (build-system.md); project-owned libraries build SHARED by default
+  (DLLs), with a `SC_BUILD_STATIC=ON` option for static builds.
 - Pinned, stable dependency versions; straightforward builds; avoid unnecessary
   Git submodules.
 - Shader pipeline must produce backend-appropriate artifacts (SPIR-V / Metal / DXIL)
