@@ -65,7 +65,7 @@ fence-based correctness (submit + fence wait).
 **Prerequisites:** M1; **G2** (PNG for the test quad); shader tools or a
 single hand-compiled test shader per backend. **Also starts the `psx`
 library** (psx-library.md): the independent, prefix-free PSX library
-target (root subproject, shared by default) lands now with its
+target (root subproject) lands now with its
 first modules (`psx::bpe`, `psx::xa`, `psx::tag`, `psx::gte`) so the
 golden suite (testing.md §2.11) is green from the library's first commit —
 it is dependency-free and needs no GPU/SDL, so it proceeds in parallel

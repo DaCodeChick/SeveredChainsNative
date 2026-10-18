@@ -10,13 +10,14 @@ state machines) and one software reference rasterizer — not CPU, timing,
 or full-system emulation.
 
 **Identity (owner decision):** the library is **prefix-free — no Sc/SC/sc
-in any of its names** (target `psx`, produced `psx.dll` / `libpsx.so` /
-`psx.dylib`, namespace `psx::`, source dir `psx/` at the repository root).
-It is a separate project identity from Severed Chains today and may be
-extracted to its own repository in the future; the root-level placement
-keeps that extraction mechanical. **Build form:** shared by default (DLL
-preference), with a CMake option (`SC_BUILD_STATIC=ON`) for a static build
-— build-system.md §1.
+in any of its names** (CMake target `psx`, namespace `psx::`, source dir
+`psx/` at the repository root). It is a separate project identity from
+Severed Chains today and may be extracted to its own repository in the
+future; the root-level placement keeps that extraction mechanical.
+**Build form:** not prescribed by the architecture — the library is
+declared without a library type and CMake's built-in `BUILD_SHARED_LIBS`
+selects the build form at configuration time; that choice belongs to the
+user (build-system.md §1).
 
 ## 1. Boundary
 

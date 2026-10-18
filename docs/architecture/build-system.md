@@ -3,8 +3,8 @@
 Requirements: CMake + Ninja; reproducible builds on Windows / Linux / macOS
 (Apple Silicon); exceptions disabled on all project-owned targets; stable
 pinned dependencies; no unnecessary submodules; documented clean-clone
-procedure + platform prerequisites; shader compilation integrated; shared
-engine library + thin host; Debug/Release configurations; packaging.
+procedure + platform prerequisites; shader compilation integrated; engine
+library + thin host; Debug/Release configurations; packaging.
 
 ## 1. Top-Level Layout
 
@@ -16,50 +16,49 @@ psx/                          # reusable PS1 library — target `psx`, namespace
                               #   be extracted into its own repo. See psx-library.md
 cmake/
   ScToolchain.cmake           # compiler flags, exception/RTTI policy, sanitizers,
-                              #   + SC_BUILD_STATIC (shared-vs-static) wiring
+                              #   sc_add_library (build form follows
+                              #   CMake's BUILD_SHARED_LIBS — user's choice)
   ScDeps.cmake                # dependency resolution (FetchContent/vcpkg/Qt6)
   ScShader.cmake              # shader build rules (glslang/spirv-cross/dxc)
   ScPackaging.cmake           # install rules, bundle layout
   versions.cmake              # pinned versions (single source of truth)
-src/engine/CMakeLists.txt     # scengine (shared by default; static via SC_BUILD_STATIC)
-src/game/CMakeLists.txt       # scgame (shared by default; the "lod" content lives here)
-src/libs/dabas/CMakeLists.txt # scdabas (shared by default, std-only — the Mogul Dabas minigame)
+src/engine/CMakeLists.txt     # scengine (build form: CMake BUILD_SHARED_LIBS)
+src/game/CMakeLists.txt       # scgame (build form: CMake BUILD_SHARED_LIBS; the
+                              #   "lod" content lives here)
+src/libs/dabas/CMakeLists.txt # scdabas (build form: CMake BUILD_SHARED_LIBS;
+                              #   std-only — the Mogul Dabas minigame)
 src/sdk/CMakeLists.txt        # sc-sdk (plugin SDK: frozen headers + toolchain file)
 src/tools/qt/CMakeLists.txt   # launcher, settings, modmanager, debugger, inspector
 src/tools/fate/CMakeLists.txt # fate CLI (pure C++, no Qt; links psx only)
-src/plugins/examples/         # sample plugin (SHARED, C++23 SDK consumer)
+src/plugins/examples/         # sample plugin (explicitly SHARED — must be
+                              #   loadable; C++23 SDK consumer)
 tests/                        # minimal in-repo test runner (no new dep) — see testing.md
 psx/tests/                    # psx standalone tests (target `psx-tests`, links psx only)
 ```
 
-**Build form — shared vs static (owner preference):** project-owned
-libraries (`psx`, `scengine`, `scgame`, `scdabas`) build as **shared
-libraries (DLLs) by default**. A single CMake option selects static:
-
-```cmake
-# OFF (default): shared/.dll/.so/.dylib   ON: static archives
-option(SC_BUILD_STATIC "Build project-owned libraries STATIC instead of the SHARED default" OFF)
-```
-
-Applied uniformly by a small `sc_add_library(<name> ...)` helper in
-`ScToolchain.cmake` (picks `SHARED`/`STATIC` from the option, then applies
-`sc_noexcept`/`sc_nortti` and visibility flags). The sample plugin and the
-host executable are unaffected (always shared/executable). Note the
-exception: `scgame` may be compiled into the host in a fully static build
-— the default is a shared `scgame` DLL.
+**Build form (owner decision): the user's choice, via CMake's built-in
+`BUILD_SHARED_LIBS`.** All project-owned libraries (`psx`, `scengine`,
+`scgame`, `scdabas`) are declared **without a library type**
+(`add_library(<name> <sources>)`), so CMake's built-in `BUILD_SHARED_LIBS`
+option selects the build form at configuration time. The architecture
+prescribes no build form and no default — that choice belongs to the user.
+A `sc_add_library(<name> ...)` helper in `ScToolchain.cmake` wraps the
+typeless declaration plus `sc_noexcept`/`sc_nortti` and visibility flags.
+One explicit exception: the **sample plugin is always SHARED** (it must be
+loadable at runtime); the host is always an executable.
 
 **Targets:**
 | Target | Type | Links |
 |---|---|---|
-| `psx` | **SHARED by default** (STATIC if `SC_BUILD_STATIC=ON`); **prefix-free**, **zero third-party deps**; no SDL/Qt/Luau/engine | C++23 std only |
-| `scdabas` | SHARED by default (static option); std only; host-interface driven | C++23 std only |
-| `scengine` | SHARED by default (static option); dynamic symbol prefix `sc_`, hidden visibility | **psx**, SDL3, GLM (hdr), EnTT (hdr), Luau, stb_image, (libcurl/libopus optional) |
-| `scgame` | SHARED by default (static option); the "lod" content module | scengine, **scdabas** |
+| `psx` | library (typeless — `BUILD_SHARED_LIBS` selects the build form); **prefix-free**, **zero third-party deps**; no SDL/Qt/Luau/engine | C++23 std only |
+| `scdabas` | library (typeless); std only; host-interface driven | C++23 std only |
+| `scengine` | library (typeless); symbol prefix `sc_`, hidden visibility (shared builds) | **psx**, SDL3, GLM (hdr), EnTT (hdr), Luau, stb_image, (libcurl/libopus optional) |
+| `scgame` | library (typeless); the "lod" content module | scengine, **scdabas** |
 | `severed-chains` (host) | EXECUTABLE (thin) | scgame, scengine |
 | `severed-chains-launcher` / `-settings` / `-modmanager` / `-debugger` / `-inspector` | EXECUTABLE | scengine + Qt6 |
 | `fate` | EXECUTABLE | **psx** (script/fate parts — no engine needed) + in-repo fate compiler |
-| `sc-sdk` | INTERFACE (plugin SDK headers + toolchain file + engine import lib) | — (consumers link scengine) |
-| `scplugin_example` | SHARED (plugin, **C++23 against sc-sdk**) | scengine (via SDK import lib) |
+| `sc-sdk` | INTERFACE (plugin SDK headers + toolchain file; engine import library in shared builds) | — (consumers link scengine) |
+| `scplugin_example` | SHARED (explicit — must be loadable at runtime; **C++23 against sc-sdk**) | scengine (via SDK import lib) |
 | `sc-tests`, `sc-fuzz` | EXECUTABLE | per testing.md |
 | `psx-tests` | EXECUTABLE (standalone subproject) | psx only |
 | `sc-api-docs` | CUSTOM (doxygen over engine + psx + SDK public headers → `docs/api/`) | — |
@@ -202,8 +201,8 @@ cmake --build build
 - **Install layout (prefix):**
   ```
   bin/               # host + tools
-  lib/               # scengine, psx, scgame, scdabas (.dll/.so/.dylib by default),
-                     #   (Qt shared by system)
+  lib/               # scengine, psx, scgame, scdabas (layout follows
+                     #   BUILD_SHARED_LIBS); Qt per system installation
   resources/         # shaders (compiled), fonts, UI art (non-copyrighted)
   share/             # gamecontrollerdb.txt (SDL game controller db — shipped
                      #   like the Java project), default configs

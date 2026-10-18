@@ -18,7 +18,7 @@ renders through SDL3 GPU — never Qt widgets.
 
 ## 2. Engine Independence & Coexistence
 
-- The game engine never links Qt. Qt tools link **the engine shared library**
+- The game engine never links Qt. Qt tools link **the engine library**
   (`scengine`) for: config access, mod manifest reading, asset decoding
   (engine `ps1` decoders — no GPU device needed for decoding), Tag
   serialization, save reading.
@@ -73,13 +73,13 @@ renders through SDL3 GPU — never Qt widgets.
   (+ Network only for the launcher's update check, or do updates over the
   engine's HTTP util — keep Qt lean: Core/Gui/Widgets + optional Network).
 - Licensing: **LGPL v3** (or commercial). For our AGPL-3.0 project: LGPL
-  dynamic linking is the compliant path (engine is already a shared library;
-  tools link Qt dynamically, no static Qt). Documented in licensing.md.
+  dynamic linking of Qt is the compliant path (tools link Qt dynamically
+  — a license obligation; no static Qt). Documented in licensing.md.
 
 ## 3. Debugger Architecture (separate process)
 
 ```
-game (engine shared lib)
+game (engine library)
   └─ DebugServer (in-engine, socket or named-pipe; local-only, no auth needed
      on localhost; token in a runtime file)
        ├─ introspection: engine state, scenes/entities (via EnTT-safe

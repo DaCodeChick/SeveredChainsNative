@@ -50,8 +50,7 @@ layout**).
 New doc `docs/architecture/psx-library.md`: an independent C++23 library
 **`psx` (target `psx`, namespace `psx::`) — prefix-free (no Sc/SC/sc;
 independent identity, may be extracted to its own repo), zero third-party
-deps, no SDL/Qt/game logic, not a PS1 emulator, SHARED by default
-(`SC_BUILD_STATIC=ON` for a static build)**. Modules (all verified against
+deps, no SDL/Qt/game logic, not a PS1 emulator**. Modules (all verified against
 reference source): `psx::gte` (GTE math), `psx::gpu` (PS1 GS/GPU
 semantics + the software reference rasterizer — parity oracle + legacy/
 VRAM render modes), `psx::spu` (SPU voice model), `psx::xa` (XA ADPCM),
@@ -61,9 +60,9 @@ PS1-era formats). LoD-only containers (CContainer/MCQ/CMB) stay in
 `game/`; the Dabas handheld is **not** PS1 hardware → `src/libs/dabas`
 (target `scdabas`), not the `psx` library. Build rule: `psx` compiles
 standalone (no engine/SDL/Qt/Luau). Updated: engine-design.md (module
-tree + boundary rules), build-system.md (`psx`/`scdabas` targets,
-shared-by-default + `SC_BUILD_STATIC`, standalone test target, CMake
-dependency audit), dependencies.md (in-repo zero-dep libraries),
+tree + boundary rules), build-system.md (`psx`/`scdabas` targets, standalone
+test target, CMake dependency audit), dependencies.md (in-repo zero-dep
+libraries),
 testing.md (§2.11 psx standalone golden suite), roadmap.md (psx starts
 M2, completes M6, rasterizer M7).
 
@@ -159,7 +158,7 @@ CLI).
 
 ### 8. Post-follow-up revisions (owner preferences, 2026-10-18)
 
-Two owner decisions refined the follow-up deliverables (docs updated in
+Owner decisions refined the follow-up deliverables (docs updated in
 place; no new files):
 
 1. **Naming — acronyms fully capitalized + PascalCase methods.** In
@@ -175,12 +174,14 @@ place; no new files):
    interfaces/methods), luau-api.md, roadmap.md, testing.md, psx-library.md
    (conventions section), progress.md. Third-party names (SDL_*, luau_*,
    Qt, verbatim Java citations) preserved.
-2. **Build form — shared (DLL) by default, static option.** Owner prefers
-   DLLs over static libraries, as a CMake option: new `SC_BUILD_STATIC`
-   option (default OFF) — project-owned libraries `psx`, `scengine`,
-   `scgame`, `scdabas` build SHARED by default, STATIC when ON (applied via
-   a `sc_add_library` helper; build-system.md §1). Sample plugin stays
-   SHARED.
+2. **Build form — user's choice via CMake's built-in
+   `BUILD_SHARED_LIBS`.** Project-owned libraries (`psx`, `scengine`,
+   `scgame`, `scdabas`) are declared without a library type; CMake's
+   built-in `BUILD_SHARED_LIBS` selects the build form at configuration
+   time. The architecture prescribes no build form (no "static"/
+   "dynamic" build-form terminology, no custom option — a drafted
+   `SC_BUILD_STATIC` was superseded by the built-in). The sample plugin is
+   the single explicitly-SHARED exception (must be loadable at runtime).
 3. **PSX library is prefix-free.** The reusable PSX library must not carry
    the project prefix — it is separate from Severed Chains (and may become
    its own project): target `psx` (was `scpsx`), namespace `psx::` (unchanged),
@@ -191,7 +192,7 @@ place; no new files):
    psx-library.md (identity + build form), build-system.md (layout, option,
    targets, CI, packaging), engine-design.md (tree + boundaries),
    testing.md, roadmap.md, dependencies.md, AGENTS.md, dig-dabas.md §5
-   (shared-by-default framing).
+   (build-form framing).
 
 ## Completed Research (Phase 0 original, unchanged)
 
@@ -241,9 +242,9 @@ supersede the specific items listed in §7.
 
 ## Architectural Decisions (final, Phase 0 + follow-up)
 
-- Engine shared lib (`scengine`) + thin host; **`psx` (PSX tech — prefix-free,
-  independent identity) + `scdabas` (minigame) as zero-dep libraries, SHARED by
-  default (`SC_BUILD_STATIC` option)**; game content
+- Engine library (`scengine`) + thin host; **`psx` (PSX tech — prefix-free,
+  independent identity) + `scdabas` (minigame) as zero-dep libraries**; build
+  form is the user's choice via CMake `BUILD_SHARED_LIBS`. Game content
   module registers everything through the mod API (LodMod pattern).
 - Sim/render decoupled, rate-locked to original vsyncMode × speed.
 - SDL3 GPU only; GLSL 450 → SPIR-V (glslang) → MSL (SPIRV-Cross) → DXIL

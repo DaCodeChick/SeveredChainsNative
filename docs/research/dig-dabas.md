@@ -156,10 +156,10 @@ Host-side responsibilities (all in `Dabas` adapter, verified):
 ## 5. Integration recommendation (native)
 
 **Decision: a separate C++23 library target (`scdabas`) inside the native
-repo, linked into the game module — built SHARED by default (owner DLL
-preference; `SC_BUILD_STATIC=ON` for a static build; nothing
-functionally *requires* a DLL). Not a plugin; not part of `scengine`; not
-part of the prefix-free `psx` library.**
+repo, linked into the game module. The build form is the user's choice
+(CMake's built-in `BUILD_SHARED_LIBS`; the architecture prescribes nothing,
+and nothing functionally *requires* any particular form). Not a plugin; not
+part of `scengine`; not part of the prefix-free `psx` library.**
 
 Rationale:
 1. **Parity with the reference architecture:** the Java project keeps it a
@@ -175,11 +175,11 @@ Rationale:
    PlayStation system; the psx library (psx-library.md) must not absorb
    it. (The PS1 itself runs this game *as data*; the VM is a game
    mechanic, like a character in a minigame box.)
-4. **Same-process link (shared by default):** the host adapter needs
-   per-frame pixel/audio/input callbacks with zero IPC; a same-process
-   library is the simplest correct boundary. The original task said "do
-   not assume it requires a DLL" — respected: nothing *requires* a DLL;
-   shared is just the default build form (SC_BUILD_STATIC opts out).
+4. **Same-process link:** the host adapter needs per-frame pixel/audio/
+   input callbacks with zero IPC; a same-process library is the simplest
+   correct boundary. The original task said "do not assume it requires a
+   DLL" — respected: nothing functionally requires any particular build
+   form; that choice is the user's (CMake `BUILD_SHARED_LIBS`).
 5. **Testability:** the console has no SDL/Qt dependency (pixels are an
    `int[32]`, audio is a byte callback, time is injectable) — the native
    `scdabas` keeps that: pure C++23, driven by a host interface; a headless

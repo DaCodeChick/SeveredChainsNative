@@ -13,14 +13,14 @@ maintenance and explicit approval.
 | GLM | pin (latest 1.0.x) | MIT | math (mat4/quat/vec, GLM-GTC where needed) | header-only, no-exceptions (`GLM_FORCE_NO_CTOR` available; default fine) |
 | EnTT | pin (latest 3.x) | MIT | ECS (scenes/entities/events) | header-only, no-exceptions; **kept out of plugin ABI** |
 | Luau | pin exact release (lua-lang/Luau) | MIT | gameplay scripting/modding VM | C++11-compatible core; builds cleanly with `-fno-exceptions` (Luau avoids exceptions; verify pinned version in CI). Prebuilt VM lib; tools: luau-analyze/luau-compile bundled for mod tooling |
-| Qt 6 | pin current LTS (Core/Gui/Widgets [+Network for launcher]) | **LGPL v3** (or commercial) | launcher, settings, mod manager, debugger, asset inspector | **Licensing: dynamic linking required for LGPL compliance** (engine already a shared lib; tools link dynamically). No static Qt. See licensing.md |
+| Qt 6 | pin current LTS (Core/Gui/Widgets [+Network for launcher]) | **LGPL v3** (or commercial) | launcher, settings, mod manager, debugger, asset inspector | **Licensing: dynamic linking of Qt is required for LGPL compliance** (tools link Qt dynamically — that is a license obligation, not a build preference). No static Qt. See licensing.md |
 | CMake ≥ 3.28 + Ninja | any recent | BSD/GPL (build-time) | build | build-time only |
 
 **In-repo reusable libraries (not third-party — no approval needed):**
 
 | Library | Deps | Role | Notes |
 |---|---|---|---|
-| `psx` (psx-library.md) | **none** (C++23 std only) | GTE, PS1 GPU semantics + software reference rasterizer, SPU model, XA/SSSq, ISO9660, TMD/TIM/ANM/MRG/DEFF/BPE/Tag, script dis/asm tooling | zero-dep is a hard build rule; prefix-free target (independent identity); shared by default (`SC_BUILD_STATIC` option); consumed by engine, game, tools, fate CLI |
+| `psx` (psx-library.md) | **none** (C++23 std only) | GTE, PS1 GPU semantics + software reference rasterizer, SPU model, XA/SSSq, ISO9660, TMD/TIM/ANM/MRG/DEFF/BPE/Tag, script dis/asm tooling | zero-dep is a hard build rule; prefix-free target (independent identity); build form follows CMake `BUILD_SHARED_LIBS` (user's choice); consumed by engine, game, tools, fate CLI |
 | `scdabas` (dig-dabas.md §5) | **none** (C++23 std only) | Mogul Dabas minigame (handheld console + game logic port) | host-interface driven; linked into scgame |
 
 ## 2. Requiring Approval (identified by research)

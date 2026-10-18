@@ -10,9 +10,9 @@ behavior while dropping the Java/ROM-mirroring organization.
 CMakeLists.txt
 psx/                         # INDEPENDENT reusable PS1 library — target `psx`,
                              #   namespace psx::, PREFIX-FREE (no Sc/SC/sc), zero
-                             #   deps, shared by default, compiles standalone;
+                             #   deps, compiles standalone;
                              #   self-contained subproject, may be extracted to its
-                             #   own repo. gte, gpu (+ software reference
+                             #   own repo (build form: CMake BUILD_SHARED_LIBS). gte, gpu (+ software reference
                              #   rasterizer), spu, xa, sssq, cdrom, tmd, tim, anm,
                              #   archive (MRG/DEFF), bpe, tag, script (dis/asm).
                              #   See psx-library.md.
@@ -63,8 +63,7 @@ src/
     (each state: state object + tick/postScriptTick/overlayTick + save data)
   libs/
     dabas/                   # scdabas — Mogul Dabas handheld console + minigame
-                             #   logic port (no SDL/Qt; host-interface driven,
-                             #   shared by default)
+                             #   logic port (no SDL/Qt; host-interface driven)
   tools/
     qt/                      # Qt 6 desktop: launcher, settings, mod manager,
                              #   debugger, asset inspector (see qt-integration.md)

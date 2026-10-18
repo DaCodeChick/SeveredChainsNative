@@ -128,14 +128,15 @@ Severed Chains' enhancements and modding capabilities.
   ISO 9660 (PS1) reading, TMD/TIM/ANM/MRG/DEFF/BPE/Tag formats — zero third-party
   deps, no SDL/Qt/game logic (psx-library.md). **Prefix-free identity** (target
   `psx`, namespace `psx::` — no Sc/SC/sc; it may be extracted to its own repo),
-  root-level subproject, shared by default. Consumed by engine, game, and tools.
+  root-level subproject (build form follows CMake `BUILD_SHARED_LIBS` — the
+  user's choice). Consumed by engine, game, and tools.
 - **Engine (reusable):** platform/lifecycle, SDL3 GPU rendering, input, audio, assets,
   scene/ECS, animation, save serialization, scripting host, native plugin host, timing.
 - **Game (LoD-specific):** characters, combat, Additions, dialogue/events, submaps,
   world map, saves content, retail registries — the equivalent of the Java `lod` mod.
 - **Mogul Dabas minigame:** separate C++23 library (`src/libs/dabas`, target
-  `scdabas`; shared by default, static via `SC_BUILD_STATIC`) for the original
-  in-game handheld minigame; first-party content, not a plugin, not PSX
+  `scdabas`) for the original in-game handheld minigame; first-party content,
+  not a plugin, not PSX
   hardware (dig-dabas.md §5).
 - **Desktop tools (Qt 6):** launcher, mod manager, asset inspection, debuggers.
 - **Native plugin API:** **C++23 interface (not a C ABI)** — C-linkage discovery
@@ -161,8 +162,10 @@ Severed Chains' enhancements and modding capabilities.
 - All project-owned targets built with exceptions disabled (see above); public API
   targets additionally built with RTTI disabled (see above).
 - `psx` compiles standalone (no engine/SDL/Qt/Luau dependencies) — enforced by the
-  build system (build-system.md); project-owned libraries build SHARED by default
-  (DLLs), with a `SC_BUILD_STATIC=ON` option for static builds.
+  build system (build-system.md). Project-owned libraries are declared without a
+  library type: CMake's built-in `BUILD_SHARED_LIBS` selects the build form at
+  configuration time — the architecture prescribes no default (the choice is
+  the user's).
 - Pinned, stable dependency versions; straightforward builds; avoid unnecessary
   Git submodules.
 - Shader pipeline must produce backend-appropriate artifacts (SPIR-V / Metal / DXIL)
