@@ -16,28 +16,35 @@ cmake/
   ScShader.cmake              # shader build rules (glslang/spirv-cross/dxc)
   ScPackaging.cmake           # install rules, bundle layout
   versions.cmake              # pinned versions (single source of truth)
-src/engine/CMakeLists.txt     # scengine (STATIC or SHARED) + scengine-internal
+src/engine/CMakeLists.txt     # scengine (SHARED) + scengine-internal
 src/game/CMakeLists.txt       # scgame (links scengine; the "lod" content lives here)
+src/libs/psx/CMakeLists.txt   # scpsx (STATIC, ZERO deps — compiles standalone)
+src/libs/dabas/CMakeLists.txt # scdabas (STATIC, std-only — the Mogul Dabas minigame)
+src/sdk/CMakeLists.txt        # sc-sdk (plugin SDK: frozen headers + toolchain file)
 src/tools/qt/CMakeLists.txt   # launcher, settings, modmanager, debugger, inspector
-src/tools/fate/CMakeLists.txt # fate CLI (pure C++, no Qt)
-src/plugins/examples/         # sample plugin (SHARED, C ABI)
-tests/                        # gtest-free? — see testing.md (use Catch2? no —
-                              #   decision: use a minimal in-repo test runner to
-                              #   avoid another dep; see testing.md)
+src/tools/fate/CMakeLists.txt # fate CLI (pure C++, no Qt; links scpsx only)
+src/plugins/examples/         # sample plugin (SHARED, C++23 SDK consumer)
+tests/                        # minimal in-repo test runner (no new dep) — see
+                              #   testing.md; tests/psx/ is a standalone target
+                              #   that links scpsx only
 ```
 
 **Targets:**
 | Target | Type | Links |
 |---|---|---|
-| `scengine` | SHARED (dynamic symbol prefix `sc_`, hidden visibility) | SDL3, GLM (hdr), EnTT (hdr), Luau, stb_image, (libcurl/libopus optional) |
-| `scgame` | STATIC (compiled into the host; the "lod" content module) | scengine |
+| `scpsx` | STATIC (**zero third-party deps**; no SDL/Qt/Luau/engine) | C++23 std only |
+| `scdabas` | STATIC (std only; host-interface driven) | C++23 std only |
+| `scengine` | SHARED (dynamic symbol prefix `sc_`, hidden visibility) | **scpsx**, SDL3, GLM (hdr), EnTT (hdr), Luau, stb_image, (libcurl/libopus optional) |
+| `scgame` | STATIC (compiled into the host; the "lod" content module) | scengine, **scdabas** |
 | `severed-chains` (host) | EXECUTABLE (thin) | scgame, scengine |
 | `severed-chains-launcher` / `-settings` / `-modmanager` / `-debugger` / `-inspector` | EXECUTABLE | scengine + Qt6 |
-| `fate` | EXECUTABLE | scengine (script/fate parts) |
-| `scplugin_example` | SHARED (plugin, C ABI) | scengine headers only (runtime-resolved) |
-| `sc-tests`, `sc-fuzz` | EXECUTABLE | per testing.md |
+| `fate` | EXECUTABLE | **scpsx** (script/fate parts — no engine needed) + in-repo fate compiler |
+| `sc-sdk` | INTERFACE (plugin SDK headers + toolchain file + engine import lib) | — (consumers link scengine) |
+| `scplugin_example` | SHARED (plugin, **C++23 against sc-sdk**) | scengine (via SDK import lib) |
+| `sc-tests`, `sc-fuzz` | EXECUTABLE | per testing.md (`sc-tests-psx` links scpsx only) |
+| `sc-api-docs` | CUSTOM (doxygen over engine + psx + SDK public headers → `docs/api/`) | — |
 
-## 2. Exception-Disabled Enforcement (the core requirement)
+## 2. Exception- & RTTI-Disabled Enforcement (the core requirement)
 
 `ScToolchain.cmake`:
 ```cmake
@@ -51,15 +58,32 @@ else()
   target_compile_options(sc_noexcept INTERFACE -fno-exceptions)
 endif()
 target_compile_features(sc_noexcept INTERFACE cxx_std_23)
+
+# Public API targets (scpsx, scengine public, sc-sdk) additionally:
+add_library(sc_nortti INTERFACE)
+target_link_libraries(sc_nortti INTERFACE sc_noexcept)
+if(MSVC)
+  target_compile_options(sc_nortti INTERFACE /GR-)
+else()
+  target_compile_options(sc_nortti INTERFACE -fno-rtti)
+endif()
 ```
-- Every target: `target_link_libraries(<t> PRIVATE sc_noexcept)`.
+- Every target: `target_link_libraries(<t> PRIVATE sc_noexcept)`; the
+  **public API targets** (`scpsx`, `sc-sdk`) additionally link `sc_nortti`
+  (AGENTS.md: no RTTI across public API boundaries — the plugin API and
+  engine public headers never `dynamic_cast`).
 - **Qt bridge exception:** `qtbridge` sources (the narrow C-shim TUs,
   qt-integration.md §2) get a `sc_qt_shim` interface *without* the flag
   (documented exception; all other Qt tool code keeps `-fno-exceptions`).
+- **Plugin SDK toolchain file** (`sc_toolchain.cmake`, native-api.md §8):
+  plugin builds import it — C++23, `-fno-exceptions -fno-rtti`, the same
+  warning/visibility flags, and it records the **toolchain hash** that
+  `PluginInfo::toolchain` must carry (the loader enforces the match).
 - **Verification steps (Milestone 1 acceptance):**
   1. `try_compile` probe with `throw` fails on Clang/GCC/MSVC.
-  2. Build with `-Werror` on the project sources.
-  3. Link a TU that references a symbol with an EH personality → link
+  2. `try_compile` probe with `dynamic_cast` fails on public API targets.
+  3. Build with `-Werror` on the project sources.
+  4. Link a TU that references a symbol with an EH personality → link
      failure expected (optional, toolchain-dependent).
 - Third-party: SDL3/EnTT/GLM/Luau/stb compile fine with exceptions disabled
   (verified in dependencies.md §3); Qt is the documented boundary.
@@ -71,6 +95,10 @@ target_compile_features(sc_noexcept INTERFACE cxx_std_23)
   `prebuilt/VM` via its CMake), stb_image (single file). This makes the
   clean-clone build self-contained given network access; CI mirrors
   (cache) for reproducibility.
+- **scpsx / scdabas:** no dependencies at all — nothing to fetch; they build
+  from their own sources only (psx-library.md §1 is a hard build rule:
+  a CMake audit target fails the build if scpsx/scdabas link anything but
+  the C++ standard library).
 - **SDL3:** platform package manager preferred (avoids building SDL from
   source): vcpkg (Windows) with pinned port version; system/brew (Linux/macOS)
   via `find_package(SDL3)`. Fallback: FetchContent SDL3 source build (slower,
@@ -164,8 +192,12 @@ cmake --build build
 
 - Matrix: Windows (MSVC + clang-cl), Ubuntu (GCC + Clang), macOS (arm64 +
   x86_64 runners if available).
-- Jobs: build (all targets) → unit tests → ABI/plugin tests → shader
-  golden compile → (per-platform) headless GPU smoke test (Milestone 2+) →
+- Jobs: build (all targets) → unit tests (incl. `sc-tests-psx` standalone)
+  → **SDK compile probes** (throw/rtti on SDK headers; frozen-layout
+  `static_assert` probe vs previous SDK) → **oldest-plugin matrix** (sample
+  plugin built against SDK v1 loads on current engine; wrong-toolchain
+  negative test) → shader golden compile → (per-platform) headless GPU smoke
+  test (Milestone 2+) → doxygen (warnings-as-errors on public headers) →
   pack artifacts.
 - Caching: vcpkg dirs, FetchContent git caches, shader tool artifacts.
 

@@ -1,297 +1,429 @@
-# Native Extension API — Versioned C ABI
+# Native Extension API — C++23 Plugin Interface
 
-Design for first-class native plugins (`.dll` / `.so` / `.dylib`) with optional
-C++23 convenience wrappers. Requirements: stable ABI, version negotiation,
-opaque handles, explicit ownership, no STL across the boundary, no EnTT
-registry exposure, no-exceptions policy.
+Design for first-class native plugins (`.dll` / `.so` / `.dylib`).
+Requirements: **C++23 at the boundary (not a C ABI)** — a C-linkage
+*discovery* entry point is the only C-isms allowed; stable ABI; version
+negotiation; explicit ownership (RAII); no-exceptions; no RTTI; no EnTT
+registry exposure; no `psx::` type exposure; not Qt's plugin system.
 
 ## 1. Core Principles
 
-1. **The engine exports; plugins consume.** The game engine builds as a shared
-   library (`scengine`), the player-facing executable is a thin host
-   (`severed-chains`) that links the engine and loads plugins. (Requirement:
-   "building the reusable engine as a shared library with a thin executable
-   host.") This also lets standalone tools (Qt debugger, fate CLI, asset
-   tools) link the same engine.
-2. **C ABI only at the boundary.** `extern "C"`, C linkage, plain structs,
-   pointers, fixed-width integers (`uint32_t`, `int64_t`, `float`, `double`),
-   UTF-8 NUL-terminated strings. No `std::*`, no RTTI, no exceptions (the
-   compiler flags guarantee they can't cross: `-fno-exceptions` on both sides
-   for our code; third-party plugins are documented as unsafe-by-contract).
-3. **One-way versioning.** Plugins declare a **minimum** engine API version
-   they support; the engine provides **versioned function tables**; plugins
-   fetch a table for a version ≤ what they declare. New engine versions add
-   tables; they never remove or change existing ones.
-4. **Explicit ownership.** Every handle API states ownership in its docs and
-   in a uniform `sc_handle` contract: a handle returned by the engine is
-   owned by the engine (plugin never frees it); a handle returned by a plugin
-   callback is owned by the plugin until the engine calls the matching
-   release fn. No implicit reference counting across the boundary — the
-   engine may clone handles (refcounted internally) but plugins only ever
-   see 1:1 ownership.
-5. **Errors, not exceptions.** All fallible entry points return an `int32_t`
-   status code or fill an out-param; a `sc_context` carries the last error
-   (code + message buffer). See `error-handling.md` for the code table.
-6. **Thread safety.** Default contract: **all engine API calls are
-   main-thread (game thread) unless documented otherwise.** Callbacks the
-   engine invokes are also main-thread. Audio-thread callbacks are the
-   exception (documented per callback). No locks are exposed; plugins that
-   need their own threads must only call thread-safe-marked APIs.
-7. **Lifecycle is a state machine** (see §4) — the engine refuses (with a
+1. **The engine exports; plugins consume.** `scengine` builds as a shared
+   library; the player-facing executable is a thin host; standalone tools
+   (Qt debugger, fate CLI) link the same engine. *(Unchanged from Phase 0.)*
+2. **C++23 at the boundary.** Plugins are C++23 shared libraries built
+   against the engine **SDK** (headers + import library + pinned toolchain,
+   §9). The only C-linkage artifact is the *discovery* entry symbol
+   (§2) — everything a plugin implements and everything it calls is C++:
+   abstract interface classes, RAII handles, `std::string`,
+   `std::expected`/`Status`. A C ABI is *not* used anywhere in the actual
+   interface.
+3. **Binary compatibility = frozen-layout discipline + toolchain parity**
+   (§9.2): existing interface classes never gain virtuals or data members;
+   new capability = new interface class; plugins are built with the same
+   compiler family + standard library as the engine (toolchain hash
+   checked at load). This is the standard C++ shared-library ABI contract
+   (same class of policy as LLVM/Chromium component ABIs) — and it is
+   *stricter and more auditable* than a hand-rolled C ABI.
+4. **One-way versioning.** Plugins declare a **minimum** engine API major
+   version; the engine exposes versioned interface classes, discovered
+   through one stable query on `EngineApi` (§3). New engine versions add
+   interfaces; they never remove or change existing ones.
+5. **Explicit ownership (RAII).** Engine-created objects handed to plugins
+   are borrowed (const or engine-owned `Shared<T>` — §9.3); plugin-created
+   objects handed to the engine transfer ownership via
+   `std::unique_ptr` at the documented transfer points only. No raw
+   delete across the boundary. Handle-leak verification at unload (§4).
+6. **Errors, not exceptions.** `sc::Status` (enum class) or
+   `std::expected<T, sc::Status>` for every fallible operation; no
+   `throw`/`try`/`catch` anywhere (compile-enforced on both sides; the SDK
+   toolchain file sets `-fno-exceptions`/`/EHs-c-` — error-handling.md).
+   RTTI is likewise disabled (`-fno-rtti` / `/GR-`) — the API never uses
+   `dynamic_cast`; interface identity is carried by id + version constants.
+7. **Thread safety.** Default contract: **all API calls are
+   main-thread (sim/render) unless the method is documented
+   `[audio-thread]` or `[thread-safe]`.** Same as Phase 0.
+8. **Lifecycle is a state machine** (§4) — the engine refuses (with a
    clear error) calls in the wrong state.
+9. **Not Qt's plugin system.** The engine implements its own loader
+   (dlopen/LoadLibrary/dyld + the contracts below). Qt 6 is used only by
+   the separate-process desktop tools (qt-integration.md) and has no role
+   in plugin loading.
 
-## 2. Entry Points (plugin → engine)
+## 2. Discovery Entry Point (the only C linkage)
 
-A plugin exports exactly one C entry point:
+A plugin exports exactly one C-linkage symbol per supported API major:
 
-```c
-// Called by the engine on dlopen/LoadLibrary.
-// `interface` is the engine's versioned API root (see §3).
-// `plugin_ctx` is a pointer to a plugin-provided context (opaque to engine).
-// Returns SC_OK or an error code; non-zero aborts loading (plugin is
-// reported as failed, mirroring MODS.getFailedToLoad()).
-SC_API int32_t sc_plugin_init(const sc_engine_interface *interface,
-                              uint32_t abi_version,
-                              void *plugin_ctx);
+```cpp
+// SDK: sc/plugin.hpp
+namespace sc {
 
-// Called on unload (before dlclose). Plugins release all resources here.
-SC_API void sc_plugin_shutdown(void *plugin_ctx);
+struct PluginInfo;
+class EngineApi;
+
+// Implemented by the plugin (one instance per plugin, plugin-owned
+// lifetime — typically a static object). Returned pointer is valid until
+// the plugin is unloaded; the engine never deletes it.
+class Plugin {
+public:
+  virtual ~Plugin() = default;
+  virtual const PluginInfo& info() const = 0;
+  // Called after load, before READY. `api` outlives the plugin's READY
+  // period. Returning a non-OK Status aborts activation (plugin reported
+  // failed — parity with Java's failed-mod UX).
+  virtual Status onLoad(EngineApi& api) = 0;
+  virtual void onReady() = 0;
+  // Called before unload. The plugin must release every engine resource
+  // it holds (the engine verifies — handle-leak check, §4).
+  virtual void onShutdown() = 0;
+};
+
+// The discovery symbol (C linkage, versioned by API major).
+extern "C" SC_API const Plugin* scPluginCreateV1();
+}  // namespace sc
 ```
 
-Plus an optional query for the plugin's own capabilities:
+The engine looks up `scPluginCreateV<max>` down to `V1` (first hit wins);
+a plugin compiled against SDK v1 exports only `scPluginCreateV1` and loads
+on any engine ≥ v1. (If a future v2 changes the `Plugin` vtable layout,
+both symbols can coexist; v1 symbols are never removed while supported.)
 
-```c
-// Optional: engine calls to discover exported capabilities (events,
-// registries, script functions, asset loaders...). Default: none.
-SC_API const sc_plugin_manifest *sc_plugin_manifest(void *plugin_ctx);
-```
+**`PluginInfo`** (value type; `std::string`s — see §9.2 toolchain rule):
 
-**Plugin manifest** (static C struct, string-annotated):
-```c
-typedef struct sc_plugin_manifest {
-    const char *id;            // reverse-DNS / scoped id: "example.dragoon_fury"
-    const char *version;       // semver "1.2.0"
-    const char *name;
-    const char *author;
-    const char *license;       // SPDX id or short text (per-mod license metadata)
-    uint32_t min_api_version;  // SC_API_VERSION_MAJOR/MINOR packed
-    const char **depends;      // NULL-terminated list of mod/plugin ids
-    uint32_t flags;            // SC_PLUGIN_FLAG_* (e.g. SCRIPTS | ASSETS | GAMEPLAY)
-} sc_plugin_manifest;
+```cpp
+struct PluginInfo {
+  std::string id;            // scoped id: "example.dragoon_fury"
+  std::string version;       // semver "1.2.0"
+  std::string name;
+  std::string author;
+  std::string license;       // SPDX id (per-mod license metadata — not assumed AGPL)
+  uint32_t minApiVersion;    // engine API major the plugin was built against
+  std::vector<std::string> depends;  // mod/plugin ids (dependency closure checked by engine)
+  uint64_t flags;            // SC_PLUGIN_FLAG_* (GAMEPLAY | ASSETS | COMBAT | ...)
+  std::string toolchain;     // compiler+stdlib hash (checked at load — §9.2)
+};
 ```
 
 ## 3. Engine Interface (engine → plugin)
 
-The engine passes a root interface; plugins walk **versioned tables**:
+`EngineApi` is the **frozen root** (v1): after v1 it never gains virtuals
+or members. Capability discovery is one stable method; each capability is
+a separate **frozen interface class** with typed constants:
 
-```c
-typedef struct sc_engine_interface {
-    uint32_t size;                 // sizeof(*this) — forward compat
-    uint32_t api_version;          // packed MAJOR.MINOR
-    const char *engine_version;    // "0.1.0+commit"
-    // Fetch a versioned table by id; returns NULL if the running engine
-    // doesn't provide that table id/version.
-    const void *(*get_table)(const char *table_id, uint32_t table_version);
-    // Error facilities
-    int32_t (*get_last_error)(const char **message, uint32_t *message_size);
-    // Diagnostics
-    void (*log)(uint32_t level, const char *tag, const char *fmt, ...);
-} sc_engine_interface;
+```cpp
+// SDK: sc/engine_api.hpp
+namespace sc {
+
+class EngineApi {
+public:
+  virtual ~EngineApi() = default;
+  virtual const EngineVersion& version() const = 0;      // "0.1.0+commit", channel
+  // Stable discovery entry. Returns nullptr if the running engine does
+  // not provide `id` at `version` (the plugin degrades gracefully,
+  // logged). `id` values are the SC_API_*_ID string constants.
+  virtual void* queryTable(const char* id, uint32_t version) = 0;
+
+  template<typename T>
+  std::optional<T*> table(uint32_t version = T::kVersion) const {
+    return static_cast<T*>(queryTable(T::kId, version));
+  }
+  // Engine-side diagnostics available to the plugin.
+  virtual void log(Verbosity level, const std::string& tag,
+                   const std::string& message) = 0;
+};
+
+// Example capability interface (frozen at v1):
+class GameplayApi {
+public:
+  static constexpr const char* kId = "sc.gameplay";
+  static constexpr uint32_t kVersion = 1;
+  virtual ~GameplayApi() = default;
+  virtual uint32_t entityCount(SceneHandle scene) const = 0;
+  virtual std::expected<uint32_t, Status>
+      entitySpawn(SceneHandle scene, const SpawnDesc& desc) = 0;
+  virtual void entityDestroy(SceneHandle scene, EntityHandle e) = 0;
+  virtual std::expected<Transform, Status>
+      entityTransformGet(SceneHandle scene, EntityHandle e) const = 0;
+  virtual void entityTransformSet(SceneHandle scene, EntityHandle e,
+                                  const Transform& t) = 0;
+  virtual GameState gameState() const = 0;              // enum + chapter...
+  virtual Timestamp gameClock() const = 0;
+};
+}  // namespace sc
 ```
 
-**Table id convention:** `"sc.<area>.<N>"` where N is the table version,
-e.g. `sc.gameplay.1`, `sc.render.1`, `sc.assets.1`, `sc.events.1`,
-`sc.save.1`, `sc.input.1`, `sc.audio.1`, `sc.script.1`, `sc.log.1`.
-Tables are `const` structs of function pointers; plugins check availability
-via `get_table` and degrade gracefully (documented per capability).
+**Value types at the boundary** (SDK header, frozen per version):
 
-Example table (`sc.gameplay.1`):
-```c
-typedef struct sc_gameplay_table_1 {
-    uint32_t size;
-    // Entity queries (handles are uint32 scene-entity ids; NOT EnTT types)
-    int32_t (*entity_count)(sc_scene scene);
-    int32_t (*entity_query)(sc_scene scene, const sc_entity_query *q,
-                            uint32_t *out_ids, uint32_t max, uint32_t *out_count);
-    int32_t (*entity_transform_get)(sc_scene scene, uint32_t entity,
-                                    sc_vec3 *out_pos, sc_quat *out_rot,
-                                    sc_vec3 *out_scale);
-    int32_t (*entity_transform_set)(sc_scene scene, uint32_t entity,
-                                    const sc_vec3 *pos, const sc_quat *rot,
-                                    const sc_vec3 *scale);
-    int32_t (*entity_spawn)(sc_scene scene, const sc_spawn_desc *desc,
-                            uint32_t *out_entity);
-    int32_t (*entity_destroy)(sc_scene scene, uint32_t entity);
-    // Game state
-    int32_t (*game_state_get)(sc_game_state *out);        // enum + chapter etc.
-    int32_t (*game_clock_get)(uint64_t *out_timestamp);
-    // Save data (see sc.save)
-    ...
-} sc_gameplay_table_1;
+```cpp
+struct Vec3 { float x, y, z; };
+struct Quat { float x, y, z, w; };
+struct Mat4 { float m[16]; };              // column-major
+struct Color { uint8_t r, g, b, a; };
+using Timestamp = int64_t;
+struct EntityHandle { uint32_t id; };      // scene-entity id; NOT an EnTT type
+struct SceneHandle  { uint32_t id; };      // scene context id
+using RegistryId = std::string;            // "modid:entryid" (grammar per mod-loader.md §4)
 ```
 
-**Data types at the boundary** (all POD):
-```c
-typedef struct { float x,y,z; } sc_vec3;
-typedef struct { float x,y,z,w; } sc_quat;
-typedef struct { float m[16]; } sc_mat4;          // column-major, std140-style
-typedef struct { uint8_t r,g,b,a; } sc_color;
-typedef int64_t sc_timestamp;
-typedef uint32_t sc_entity;                        // scene entity id
-typedef uint32_t sc_scene;                         // scene context id
-typedef const char *sc_registry_id;                // "modid.entryid"
-```
+**Rules for boundary types (the C++ version of "no STL by accident"):**
+- `std::string` / `std::vector` are **allowed and normal** across the
+  boundary — safe under the toolchain-parity rule (§9.2), which the
+  loader *enforces* (mismatched toolchain hash → load refused).
+- `std::string_view` / `std::span` may be used **only as non-owning
+  inputs, valid for the duration of the call** (documented per method).
+- The EnTT registry is never exposed (entities are `EntityHandle`s;
+  components are queried via typed methods on `GameplayApi` /
+  `CombatApi`). `psx::` types are never exposed (engine services hand out
+  decoded *results* as SDK value types).
+- Every interface class and value struct is **layout-frozen** once shipped
+  in a major version (§9.2).
 
-**Registry access from plugins** (string-IDs, mirrors `RegistryId`):
-```c
-typedef struct sc_registry_table_1 {
-    uint32_t size;
-    // Generic entry lookup: returns a POD descriptor for known entry kinds;
-    // complex entries expose per-kind tables (characters, additions, items...)
-    int32_t (*entry_get)(sc_registry_id id, sc_entry_kind kind,
-                         void *out_desc, uint32_t out_size);
-    int32_t (*entry_list)(sc_entry_kind kind, sc_registry_id *out,
-                          uint32_t max, uint32_t *out_count);
-    // Read registry-registered config
-    int32_t (*config_get_bool)(sc_registry_id id, int *out);
-    int32_t (*config_get_int)(sc_registry_id id, int32_t *out);
-    int32_t (*config_get_float)(sc_registry_id id, float *out);
-    int32_t (*config_get_string)(sc_registry_id id, char *out, uint32_t size);
-} sc_registry_table_1;
+**Registry access** (`RegistryApi`, mirrors mod-loader.md semantics):
+
+```cpp
+class RegistryApi {
+public:
+  static constexpr const char* kId = "sc.registry";
+  static constexpr uint32_t kVersion = 1;
+  virtual ~RegistryApi() = default;
+  // Lazy resolution: missing entry → Err(Status::ModNotLoaded) at USE
+  // time (parity with Java RegistryDelegate behavior), attributed to the
+  // owning mod id.
+  virtual std::expected<EntryRef, Status> entry(const RegistryId& id,
+                                                EntryKind kind) const = 0;
+  virtual std::vector<RegistryId> entryList(EntryKind kind) const = 0;
+  virtual std::expected<bool, Status>   configBool(const RegistryId& id) const = 0;
+  virtual std::expected<int32_t, Status> configInt(const RegistryId& id) const = 0;
+  virtual std::expected<float, Status>   configFloat(const RegistryId& id) const = 0;
+  virtual std::expected<std::string, Status> configString(const RegistryId& id) const = 0;
+};
 ```
 
 ## 4. Lifecycle
 
 ```
-discover (mod dir scan: native/*.so|dll|dylib + manifest read)
-  → validate (manifest schema, id uniqueness, dependency closure,
-              min_api_version <= engine api_version, file signature optional)
-  → load (dlopen RTLD_LAZY | LoadLibrary; capture dlerror)
-  → init   (sc_plugin_init; plugin fetches tables; plugin registers
-             callbacks/entries; any error → plugin marked failed, unloaded,
-             reported in mod list — parity with Java's failed-mod UX)
-  → ready  (plugin's registered events fire; script functions available)
-  → shutdown (sc_plugin_shutdown; engine calls before dlclose; engine
-             verifies no engine handles are still owned by the plugin —
-             handle-leak check logged)
-  → unload (dlclose)
+discover (mod dir scan: <mod>/native/*.so|dll|dylib + `scPluginCreateV*` presence)
+  → validate (PluginInfo schema, id uniqueness, dependency closure,
+              minApiVersion <= engine major, toolchain hash match §9.2)
+  → load     (dlopen RTLD_LAZY / LoadLibrary / dlopen-macos; symbol lookup
+              scPluginCreateV<max..1>; capture loader error)
+  → init     (info() + onLoad(api): plugin fetches tables via api.table<T>(),
+              registers callbacks/entries; any Err → plugin marked failed,
+              unloaded, reported in mod list — parity with Java failed-mod UX)
+  → ready    (onReady(); registered events fire; script functions available)
+  → shutdown (onShutdown(); engine verifies the plugin holds no engine
+              resources — handle-leak check, logged; engine then unloads)
+  → unload   (dlclose; Plugin* and all engine-side plugin state destroyed)
 ```
 
-- **Hot reload: not supported in v1.** Documented limitation: unloading a
-  native plugin with live resources is unsafe across platforms (static
-  destructors, registered callbacks, GPU resources owned by the plugin).
-  Reload = restart (the Qt mod manager can orchestrate a game restart with
-  the new mod set, mirroring Java's update-restart flow).
-- **Crash containment:** a crashing plugin (segfault) takes down the process —
-  unavoidable with in-process dlopen. Mitigations: (a) strict API contracts +
-  fuzz/ABI tests; (b) optional out-of-process mode (documented future work):
-  run untrusted plugins in a child process with the C ABI over a socket —
-  not in v1, but the table-based design keeps it possible.
-- Plugin failure at any stage → logged + surfaced in mod manager + in-game
+- **Hot reload: not supported in v1** (unchanged): unload with live
+  resources (GPU, audio, registered callbacks) is unsafe; reload =
+  orchestrated restart (Qt mod manager; mirrors Java's update-restart).
+- **Crash containment:** a crashing plugin takes down the process —
+  in-process dlopen limitation (unchanged). Mitigations: strict API
+  contracts + ABI/fuzz/sanitizer tests; an out-of-process mode remains a
+  documented future work item (the interface design — plain values +
+  id/version discovery — keeps it possible without redesign).
+- **Cross-plugin isolation:** plugins cannot reference each other's
+  symbols (loader keeps per-plugin symbol visibility where the platform
+  allows; otherwise documented). Coordination is via engine events/
+  registries only.
+- Failure at any stage → logged + surfaced in mod manager + in-game
   notification (parity: `GameOverlay.addNotification`).
 
-## 5. Capability Areas (table map)
+## 5. Capability Areas (interface map)
 
-| Table | Capabilities |
+| Interface (`kId`) | Capabilities |
 |---|---|
-| `sc.gameplay` | entity queries/spawn/destroy, transforms, game state/clock, flags |
-| `sc.events` | subscribe/unsubscribe to engine events (§6), per-subscription callback |
-| `sc.input` | read action state (pressed/held/repeat/axis), define new actions, bind queries |
-| `sc.render` | register custom draw callbacks (render event hook with a scoped `sc_render` command handle: pipelines the plugin creates via engine-provided builder, textures, vertex/index buffers), post-shader uniform hooks (e.g. `turn_order_bounds`-style) |
-| `sc.audio` | register music (sequence file refs), play SFX from soundbanks, volume control, music event queries |
-| `sc.assets` | register path-override roots (asset replacement), query/decode assets via engine decoders (TMD/TIM/ANM...), upload decoded data to GPU |
-| `sc.save` | read/write the plugin's `modData` slot (scoped by plugin id; engine serializes as Tag list entries — byte-compat with the Java `modData` slot layout for the same id), save-validation hooks |
-| `sc.script` | register story-script functions (op → callback with param in/out buffers), query script flag state (parity with `ReadGlobalFlagsEvent` + `@ScriptDescription`) |
-| `sc.combat` | battle lifecycle queries, **addition input evaluator registration** (§7), hit result overrides |
-| `sc.log` | leveled logging with tags |
+| `sc.gameplay` (`GameplayApi`) | entity queries/spawn/destroy, transforms, game state/clock, flags |
+| `sc.events` (`EventsApi`) | subscribe/unsubscribe (§6), post custom events (visible to Luau + native listeners) |
+| `sc.input` (`InputApi`) | read action state (pressed/held/repeat/axis), define new actions, bind queries |
+| `sc.render` (`RenderApi`) | custom draw callbacks on the render event (scoped `RenderScope`: pipelines created via engine builder, textures, vertex/index buffers), post-shader uniform hooks (e.g. `turn_order_bounds`-style) |
+| `sc.audio` (`AudioApi`) | register music (sequence file refs), play SFX from soundbanks, volume control, music event queries; `[audio-thread]`-marked callbacks documented |
+| `sc.assets` (`AssetsApi`) | register path-override roots (asset replacement), query/decode assets via engine decoders (TMD/TIM/ANM... → SDK value types), upload decoded data to GPU |
+| `sc.save` (`SaveApi`) | read/write the plugin's `modData` slot (scoped by plugin id; serialized as Tag entries — byte-compat with the Java `modData` slot layout for the same id), save-validation hooks |
+| `sc.script` (`ScriptApi`) | register story-script functions (op → callback with typed param in/out), query script flag state (parity with `ReadGlobalFlagsEvent` + `@ScriptDescription`) |
+| `sc.combat` (`CombatApi`) | battle lifecycle queries, **addition input evaluator registration** (§7), hit result overrides |
+| `sc.log` (`LogApi`) | leveled tagged logging (also available on `EngineApi::log`) |
 
-## 6. Events (C ABI)
+## 6. Events (C++)
 
-```c
-typedef struct sc_events_table_1 {
-    uint32_t size;
-    int32_t (*subscribe)(const char *event_id,   // e.g. "battle.turned", "render"
-                         sc_event_callback cb,
-                         void *user,
-                         uint32_t *out_sub_id);
-    int32_t (*unsubscribe)(uint32_t sub_id);
-    // Post a custom event visible to all listeners (Luau + native):
-    int32_t (*post)(const char *event_id, const sc_event_payload *payload);
-} sc_events_table_1;
+```cpp
+// SDK: sc/events.hpp
+namespace sc {
+using EventId = std::string;   // "battle.turned", "render", ...
 
-typedef void (*sc_event_callback)(const sc_event *e, void *user);
-typedef struct sc_event {
-    const char *id;
-    uint64_t seq;                 // monotonic event sequence
-    const sc_event_payload *payload;  // typed per event id (see docs per id)
-    // Cancelable events:
-    int32_t (*cancel)(const sc_event *e);
-} sc_event;
+struct Event {
+  EventId id;
+  uint64_t seq;                       // monotonic
+  // Typed payload access (per-event accessors documented 1:1 with the
+  // Java event catalog — the catalog table ships in the API reference):
+  // e.g. template <> BattleTurnedEvent payload of event "battle.turned":
+  //   auto turn = e.payload<BattleTurnedEvent>();
+  std::expected<void, Status> cancel() const;  // CancelableEvent parity:
+};                                       // stopPropagation/cancel semantics
+using EventCallback = std::function<void(const Event&)>;
+
+class EventsApi {
+public:
+  static constexpr const char* kId = "sc.events";
+  static constexpr uint32_t kVersion = 1;
+  virtual ~EventsApi() = default;
+  // `handler` may be a lambda/std::function capturing plugin state; the
+  // engine copies it (toolchain rule applies). Priority semantics mirror
+  // mod-loader.md §3 (higher first; same priority = registration order).
+  virtual std::expected<uint32_t, Status>
+      subscribe(const EventId& id, EventCallback handler,
+                Priority priority = Priority::Normal) = 0;
+  virtual void unsubscribe(uint32_t subId) = 0;
+  virtual std::expected<void, Status> post(const EventId& id,
+                                           const EventPayload& payload) = 0;
+};
+}  // namespace sc
 ```
 
-Event ids mirror the Java event catalog (documented 1:1 table in the API
-docs): `render`, `engine.state.changed`, `battle.started`, `battle.ended`,
-`battle.entity.turn`, `monster.stats`, `enemy.rewards`, `input.pressed`,
-`input.released`, `game.loaded`, `game.saving`, `inventory.*`, `submap.*`,
-`worldmap.*`, `character.created`, `script.flags.read`, ...
+- Synchronous dispatch on the calling thread (parity — mod-loader.md §3);
+  handler exceptions are impossible (no exceptions); a handler signaling
+  failure returns via the event's cancel path or `EngineApi::log`.
+- Event ids mirror the Java catalog 1:1 (`render`, `engine.state.changed`,
+  `battle.started`, `battle.ended`, `battle.entity.turn`, `monster.stats`,
+  `enemy.rewards`, `input.pressed`, `input.released`, `game.loaded`,
+  `game.saving`, `inventory.*`, `submap.*`, `worldmap.*`,
+  `character.created`, `script.flags.read`, ...).
 
 ## 7. Combat Extensibility (the Playable-Lloyd seam)
 
 Java hardcodes addition input to the attack/counter actions
-(`AdditionOverlaysEffect44`). The native combat engine factors this:
+(`AdditionOverlaysEffect44`). The native combat engine factors this into a
+**C++ interface shared by Luau and native plugins** (one implementation,
+luau-api.md §4):
 
-```c
-typedef struct sc_addition_input_evaluator {
-    uint32_t size;
-    const char *id;
-    // Called per sim frame during an addition hit window.
-    // `state`: hit properties (timing bounds, counter flag), frames elapsed.
-    // `out_result`: SC_ADDITION_HIT_PENDING / SUCCESS / FAIL_WRONG / FAIL_LATE / FAIL_EARLY
-    int32_t (*evaluate)(void *user, const sc_addition_hit_state *state,
-                        sc_addition_hit_result *out_result);
-    // Optional: custom overlay draw (default = timing square)
-    int32_t (*draw_overlay)(void *user, const sc_addition_hit_state *state,
-                            sc_render *render);
-} sc_addition_input_evaluator;
+```cpp
+// SDK: sc/combat.hpp
+namespace sc {
+struct AdditionHitState {
+  uint32_t frame;                    // sim frame within the hit window
+  uint32_t lowerBound, upperBound;   // from AdditionHitProperties10 (× timing-window config)
+  bool isCounter;
+  // action query helpers (read the 5-battle-action state for `frame`):
+  std::expected<bool, Status> actionHeld(BattleAction action) const;
+};
+enum class AdditionHitResult { Pending, Success, FailWrong, FailEarly, FailLate };
+
+class AdditionInputEvaluator {
+public:
+  virtual ~AdditionInputEvaluator() = default;
+  virtual const std::string& id() const = 0;
+  // Called per sim frame during an addition hit window.
+  virtual AdditionHitResult evaluate(const AdditionHitState& state) = 0;
+  // Optional: custom overlay draw (default = the retail timing square).
+  virtual void drawOverlay(const AdditionHitState& state, RenderScope& rs) {}
+};
+
+class CombatApi {
+public:
+  static constexpr const char* kId = "sc.combat";
+  static constexpr uint32_t kVersion = 1;
+  virtual ~CombatApi() = default;
+  // Ownership: the engine takes the unique_ptr (transfer point, §1.5).
+  virtual std::expected<void, Status>
+      registerAdditionInputEvaluator(std::unique_ptr<AdditionInputEvaluator> ev) = 0;
+  virtual std::expected<void, Status>
+      setAdditionEvaluator(const RegistryId& additionId,
+                           const std::string& evaluatorId) = 0;
+  // battle lifecycle queries...
+};
+}  // namespace sc
 ```
 
 - Retail content registers the **timing-square evaluator** (attack/counter
-  actions, window bounds from `AdditionHitProperties10`, timing-window config
-  multiplier) — behavior identical to Java.
-- A mod (Luau *or* native) registers an alternative evaluator (e.g.
-  face-button sequences) and marks specific additions as using it. The combat
-  state machine consumes `evaluate()` results only — no core rewrite
-  required (requirement §11).
-- Luau gets the same capability via `Combat.Addition:setInputEvaluator(...)`
-  (see luau-api.md).
+  actions, window bounds, timing-window multiplier) — behavior identical to
+  Java.
+- A mod (Luau *or* native) registers an alternative (e.g. face-button
+  sequences) and points specific additions at it. The combat state machine
+  consumes `evaluate()` results only — no core rewrite (requirement §11).
+- Luau parity: `Combat.Addition:setInputEvaluator(...)` (luau-api.md) is an
+  adapter over this same interface.
 
-## 8. C++23 Wrappers
+## 8. SDK Packaging
 
-`src/engine/plugin_api/` provides header-only C++ wrappers (in-project,
-exceptions-disabled): `PluginContext` RAII, `Result<T>`-returning typed
-bindings, `Event<T>` typed subscriptions, string views that never escape the
-call. Wrappers are a **convenience only** — the C ABI is the contract.
+`sc-sdk` (build-system.md §2):
+- `include/sc/*.hpp` — the frozen interface headers (this contract).
+- `scengine` import library (VS `.lib` / ELF `.so` / Mach-O) — plugins link
+  it; symbols resolve against the loaded engine at dlopen time.
+- **Toolchain file** (`sc_toolchain.cmake`): sets C++23,
+  `-fno-exceptions -fno-rtti` (MSVC `/EHs-c- /GR-`), warning flags,
+  visibility flags, and records the toolchain hash string that
+  `PluginInfo::toolchain` must carry (a CMake target property the SDK's
+  manifest generator fills in).
+- Sample plugin (`plugins/examples/`) + CMake boilerplate — the
+  mod-author reference.
+- The SDK **cannot** be built with exceptions/RTTI enabled — CI compile
+  probe (the throw/rtti probes, build-system.md §2) runs on SDK headers
+  with a minimal TU.
 
-## 9. ABI Testing & Stability Policy
+## 9. ABI Stability Policy
 
-- **ABI tests:** `tests/abi/` — a plugin compiled against a given API version
-  loads and passes functional tests against the current engine (CI matrix:
-  oldest supported plugin version vs newest engine).
-- Symbol stability: engine shared lib exports a **stable C symbol prefix
-  `sc_`** (versioned export lists per platform: `.def`/`export map`/
-  `-exported_symbols_list`); C++ symbols are hidden (`-fvisibility=hidden` /
-  MSVC `/Gy` + export-on-demand).
-- Semver: breaking ABI change = MAJOR bump + old table retained (old plugins
-  keep working; new features in new tables).
-- Fuzz + sanitizers on the boundary (see testing.md).
+### 9.1 Versioning
+- **API major** = the `Plugin` entry vtable + `EngineApi` root layout.
+  Symbol `scPluginCreateV<MAJOR>`; engine tries newest→oldest.
+- **Interface version** (`T::kVersion`) = per-capability class layout.
+  `queryTable(id, version)` returns the highest version ≤ requested that
+  the engine provides, or nullptr.
+- Within a major: **frozen layout** — no added virtuals, data members, or
+  changed enum values on shipped classes/structs; additive changes only
+  (new methods appear only in a *new* interface class or a new version of
+  that interface, `kVersion` bumped, old version retained).
+- Breaking change = new major + old symbols/versions retained until the
+  deprecation policy says otherwise (semver on the API itself).
+
+### 9.2 Toolchain parity (the C++ compatibility anchor)
+- A plugin **must** be built with the same compiler family and standard
+  library as the engine: Windows = MSVC, Linux = the engine's GCC *or*
+  Clang (one per engine build; recorded), macOS = AppleClang/libc++.
+- The engine records a **toolchain hash** (compiler id+version+stdlib
+  convention flags) at build time; `PluginInfo::toolchain` must match or
+  the load is refused with a diagnostic naming both (this makes the
+  `std::string`/`std::function`/vtable assumptions *checked*, not hoped).
+- Why this is required: vtables are compiler-ABI-defined (Itanium/MSVC)
+  and `std::` type layouts are stdlib-defined; no C++ compiler flags make
+  a mixed-toolchain boundary safe. This is the documented cost of a C++
+  (vs C) boundary, and it is what makes the interface usable as C++.
+
+### 9.3 Ownership primitives
+- Borrowed: `const T&` / `T&` / `Shared<T>` (engine-defined intrusive
+  refcount — stable layout, no stdlib dependence).
+- Transfer: `std::unique_ptr<T>` at explicitly documented points (e.g.
+  `registerAdditionInputEvaluator`, resource creation APIs).
+- Plugin-owned: everything else a plugin creates; released in
+  `onShutdown()`; verified by the handle-leak check.
+
+### 9.4 ABI tests (testing.md §2.9, updated)
+- **Oldest-plugin matrix**: a sample plugin compiled against SDK v1
+  headers (same toolchain) loads and passes functional tests on the
+  current engine (CI).
+- **Frozen-layout probe**: the SDK headers carry `static_assert`s on
+  sizes/offsets of every frozen type; CI compiles the probe against the
+  SDK and against the *installed previous engine* headers — catches any
+  accidental layout drift.
+- **Negative tests**: wrong toolchain hash → refused load; missing entry
+  symbol → clean failure report; unknown table id → nullptr + graceful
+  degrade.
+- **Compile probes** on SDK headers: `-fno-exceptions` (throw) and
+  `-fno-rtti` (dynamic_cast) must fail to compile — the API surface
+  enforces the project-wide policy by construction.
+- Fuzz + ASAN/UBSAN/TSAN on the boundary (unchanged).
 
 ## 10. Limits & Documented Non-Goals
 
 - No hot reload; no JIT; no plugin-provided GPU devices.
-- No cross-plugin dependencies (plugin A can't call plugin B's exports; they
-  coordinate via engine events/registries — keeps isolation clean).
-- Plugins cannot register *new registry kinds* in v1 (Lua can; registry-kind
-  extension for native is a v2 consideration — Java allowed it; assess demand).
-- Audio callback timing: synth/SFX mixing stays on the audio thread; plugins
-  get audio-thread-marked callbacks with the same no-heap-alloc expectation
-  as Java's audio thread (documented).
+- No cross-plugin symbol references.
+- Plugins cannot register *new registry kinds* in v1 (Luau can; v2
+  consideration — Java allowed it; assess demand).
+- Mixed-toolchain plugins are refused (documented above) — the mod author
+  uses the shipped SDK toolchain file; this is a *documented build
+  requirement*, mirroring how Java mods had to be compiled for the game's
+  Java version.
+- Audio callback timing: synth/SFX mixing stays on the audio thread;
+  `[audio-thread]` callbacks carry the same no-heap-alloc expectation as
+  Java's audio thread (documented).

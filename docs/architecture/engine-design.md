@@ -18,28 +18,27 @@ src/
                              #   resource lifetimes (RAII over SDL_GPU handles)
     render/                  # Renderer (frame structure), Batches, ModelPool,
                              #   QueuedModel equivalents, TextureManager,
-                             #   Camera, post-processing, scissor stack
-    ps1/                     # REUSABLE PS1 TECH: Gte, GsState (Graphics equivalent),
-                             #   SoftwareGpu (Gpu.java port), VramTexture, Bpp,
-                             #   Tmd/Ctmd/Tim/Daba/Anm/CContainer/Mcq decoders,
-                             #   BpeDecompressor, Mrg/Deff archives, XaDecoder,
-                             #   TagSerializer, IsoReader
-    audio/                   # AudioDevice (SDL3 audio), MusicSynth (PS1 SPU seq
-                             #   synth port), Sfx (SPU port), XaStream,
-                             #   resampling, volume model
+                             #   Camera, post-processing, scissor stack;
+                             #   legacy/VRAM modes drive psx::gpu's rasterizer
+    audio/                   # AudioDevice (SDL3 audio), MusicSynth (120 Hz
+                             #   sequencer scheduling — drives psx::spu voices),
+                             #   Sfx (LoD SPU voice allocation), XaStream
+                             #   (psx::xa decoded cache), resampling, volume model
     assets/                  # AssetManager (path chain: mod overrides → base),
                              #   async loaders, cache, error results
     ecs/                     # EnTT registry wrappers + component conventions
                              #   (actors, cameras, renderables, animations)
-    script/                  # story-script VM (OpType port), script functions,
-                             #   fate compiler/patcher (tool)
-    save/                    # Tag format, SaveFile v10, migrations, mod data slots
+    script/                  # story-script VM (OpType port), script functions;
+                             #   fate patch pipeline (uses psx::script tooling)
+    save/                    # LoD save schema v10, migrations, mod data slots
+                             #   (serialized with psx::tag)
     config/                  # ConfigCollection (typed entries, presets, global)
     events/                  # typed event bus (sync, cancelable, per-sender error
                              #   isolation)
-    i18n/                    # lang keys + overrides
+    i18n/                    # lang keys + overrides (4-level specificity)
     mod/                     # mod package format, manifest, discovery, load order,
-                             #   Luau VM host, native plugin host (see native-api)
+                             #   Luau VM host, native plugin host (C++23 API —
+                             #   see native-api.md)
     util/                    # Result/Expected helpers, hashing, logging,
                              #   math (GLM wrappers), pools, non-throwing IO
   game/                      # LoD-specific ("game" — the native equivalent of LodMod
@@ -48,23 +47,41 @@ src/
                              #   additions, items, equipment, spells, shops,
                              #   encounters, campaigns, engine-state types,
                              #   elements, input actions, configs  (the "lod mod")
+    decoders/                # LoD-only container decoders (CContainer, MCQ, CMB)
+                             #   emitting psx:: IR types
+    dabas/                   # host adapter for the Mogul Dabas minigame
+                             #   (DabasScreen, rewards, save blob — dig-dabas.md)
     title/ submap/ wmap/ battle/ inventory/ text/ credits/ fmv/
     (each state: state object + tick/postScriptTick/overlayTick + save data)
+  libs/
+    psx/                     # scpsx — INDEPENDENT reusable PS1 tech (zero deps,
+                             #   no SDL/Qt/game): gte, gpu (+ software reference
+                             #   rasterizer), spu, xa, sssq, cdrom, tmd, tim, anm,
+                             #   archive (MRG/DEFF), bpe, tag, script (dis/asm) —
+                             #   see psx-library.md
+    dabas/                   # scdabas — Mogul Dabas handheld console + minigame
+                             #   logic port (no SDL/Qt; host-interface driven)
   tools/
     qt/                      # Qt 6 desktop: launcher, settings, mod manager,
                              #   debugger, asset inspector (see qt-integration.md)
-    fate/                    # fate CLI (disassemble/assemble/patch) — standalone
+    fate/                    # fate CLI (disassemble/assemble/patch) — standalone,
+                             #   links scpsx::script + the fate compiler
   plugins/
-    examples/                # sample native plugins (C ABI consumers)
+    examples/                # sample native plugins (C++23 SDK consumers)
 tests/                       # unit + integration (see testing.md)
 gfx/shaders/                 # GLSL sources (ported from reference, renamed/organized)
 resources/                   # engine resources (fonts, UI art — non-copyrighted only)
 ```
 
-**Boundary rule:** `src/engine/ps1` may contain anything generic-PS1 (decoders,
-GTE/GS, XA, BPE, Tag). `src/engine/` must not include `src/game/` headers.
-`src/game/` registers all content through the same mod API surface that third
-party mods use (see §6). Qt code (`src/tools/qt`) links engine but not game
+**Boundary rules:** `libs/psx` (scpsx) is dependency-free (C++23 standard only) and
+never includes engine, game, SDL, Qt, or Luau headers — it compiles standalone.
+`libs/dabas` depends on nothing but the C++ standard (host-interface driven). `src/
+engine/` must not include `src/game/` headers; both may include `libs/psx`. The
+engine links scpsx for the legacy/VRAM render modes (psx::gpu), GTE camera math
+(psx::gte), SPU/XA/SSSq audio (M5), and decoders (M6). `src/game/` registers all
+content through the same mod API surface that third party mods use (see §6).
+`psx::` types never cross the plugin boundary or the Luau API (native-api.md §1,
+luau-api.md §7). Qt code (`src/tools/qt`) links engine but not game
 where possible; the debugger needs game introspection hooks (see qt-integration).
 
 ## 2. Application Lifecycle & Main Loop
@@ -187,9 +204,9 @@ EnTT is used for **scene/entity management**, not engine services:
 - EnTT views process sim ticks in fixed order (transform → animation →
   collision → camera → queue submission). EnTT's deferred destroy matches our
   deferred destruction.
-- **EnTT stays out of the public plugin ABI** (requirement): plugins address
-  entities via `uint32` handles + capability queries through the C API (see
-  native-api.md).
+- **EnTT stays out of the public plugin API** (requirement): plugins address
+  entities via `sc::EntityHandle`s + typed capability methods through the
+  C++23 interface (see native-api.md).
 - Not forced into ECS: engine services (renderer, audio, assets, saves), the
   battle state machine (explicit state objects with EnTT as their entity store),
   UI screens (screen objects, not entities).

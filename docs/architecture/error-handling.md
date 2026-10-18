@@ -87,9 +87,11 @@ using StatusResult = Result<std::monostate>;   // fire-and-forget ops
   (an `ScSdl` error-mapping layer, unit-tested).
 - **Luau VM:** protected calls with out-params (see luau-api §1) — no
   exceptions; compile diagnostics returned as structured values.
-- **Plugins (C ABI):** `int32_t` status + `sc_get_last_error` (native-api
-  §2) — the ABI's error model *is* the Status enum (numeric stability:
-  values are frozen per ABI version).
+- **Plugins (C++23 API):** the same `sc::Status` enum (native-api.md §1.6) —
+  plugin methods return `Status`/`std::expected<T, Status>`; no exceptions
+  cross the boundary (both sides compile with exceptions disabled —
+  enforced by the SDK toolchain file). Status values are frozen per API
+  version (layout/version discipline, native-api.md §9).
 
 ## 3. RAII & Cleanup Discipline
 

@@ -57,16 +57,72 @@ Severed Chains' enhancements and modding capabilities.
   document limitations, do not assume our flags change them.
 - Luau runtime errors must be handled via Luau's own error-reporting facilities,
   never by letting C++ exceptions cross the boundary.
+- **No RTTI across public API boundaries:** the native plugin API and engine public
+  headers compile with RTTI disabled (Clang/GCC `-fno-rtti`, MSVC `/GR-`) and never
+  use `dynamic_cast` (native-api.md §1.6). Engine-internal code may use RTTI only
+  where it does not appear in a public header.
+
+### MANDATORY: Doxygen-Commented Public APIs
+
+- **All public project-owned C++ APIs carry Doxygen-compatible comments**: engine
+  interfaces, the PSX library APIs (psx-library.md), and the native plugin interface
+  (native-api.md) first; internal helpers where clarity benefits.
+- Document: purpose, `@param` for each parameter (in/out/ownership), `@return`
+  / `std::expected` semantics, `@errors` (which `Status` codes and when) for
+  fallible APIs,
+  **ownership/lifetime** of any handle or pointer, and **thread safety** (which
+  thread may call; default is main-thread unless documented).
+- Use standard Doxygen tags (`/** ... */`, `@brief`, `@param`, `@return`, `@errors`,
+  `@note`, `@thread`, `@see`) so `doxygen` generates the API reference without
+  per-file tweaks. Generated docs land in `docs/api/` (build target, see
+  build-system.md).
+- Third-party API names are preserved verbatim (no re-naming to fit our conventions).
+
+### Naming Conventions (mandatory for project-owned code)
+
+| Element | Convention | Example |
+|---|---|---|
+| Namespaces | abbreviated flatcase | `sc::render`, `psx::tmd`, `game::combat` |
+| Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `decompressBpe`, `kMaxVoices`, `Status::Ok` |
+| Variables and parameters | camelCase | `simFrame`, `outCount` |
+| Private fields | camelCase with trailing underscore | `simFrame_`, `outCount_` |
+| Macros | UPPER_SNAKE_CASE | `SC_API`, `SC_NOEXCEPT_TARGETS` |
+| C-linkage discovery symbols (plugin entry only) | camelCase with `sc` prefix | `scPluginCreateV1` |
+| Files | snake_case | `render_engine.cpp`, `render_engine.hpp` |
+
+- Third-party API naming is preserved (e.g. SDL_*, luau_*, Qt names stay as-is).
+- Enum values are PascalCase; `enum class` type names are PascalCase plural or
+  singular by clarity (`EntryKind`, `Priority`).
+
+### Formatting: .clang-format (mandatory)
+
+- A root-level `.clang-format` (LLVM baseline, 4-space indent, attached braces,
+  120-column limit, grouped/sorted includes, Doxygen comments left intact) is the
+  single source of formatting truth. Run `clang-format` on project-owned files you
+  touch; do **not** mass-reformat untouched files.
+- Doxygen comment blocks are preserved (no reflow that breaks `@param`/`@return`
+  alignment); clang-format's `ReflowComments` stays off.
+- Where hand layout aids readability (e.g. aligned struct fields), prefer
+  clang-format output; document intentional deviations with a `// NOLINT` + reason.
 
 ## Architectural Boundaries
 
+- **PSX library (reusable PlayStation 1 tech, independent):** GTE math, PS1 GPU/GS
+  semantics + software reference rasterizer, SPU voice model, XA/SShd/SSSq decoding,
+  ISO 9660 (PS1) reading, TMD/TIM/ANM/MRG/DEFF/BPE/Tag formats — zero third-party
+  deps, no SDL/Qt/game logic (psx-library.md). Consumed by engine, game, and tools.
 - **Engine (reusable):** platform/lifecycle, SDL3 GPU rendering, input, audio, assets,
-  scene/ECS, animation, save serialization, scripting host, native plugin API, timing.
+  scene/ECS, animation, save serialization, scripting host, native plugin host, timing.
 - **Game (LoD-specific):** characters, combat, Additions, dialogue/events, submaps,
   world map, saves content, retail registries — the equivalent of the Java `lod` mod.
+- **Mogul Dabas minigame:** separate C++23 static library (`libs/dabas`) for the
+  original in-game handheld minigame; first-party content, not a plugin, not PSX
+  hardware (dig-dabas.md §5).
 - **Desktop tools (Qt 6):** launcher, mod manager, asset inspection, debuggers.
-- **Native plugin ABI:** stable versioned C ABI, opaque handles, no STL across the
-  boundary, no EnTT registry exposure, versioned function tables.
+- **Native plugin API:** **C++23 interface (not a C ABI)** — C-linkage discovery
+  symbol only; frozen-layout C++ interfaces, toolchain-parity rule, RAII ownership,
+  no EnTT/psx exposure, versioned interfaces (native-api.md). Qt's plugin system is
+  **not** used for the engine's plugin architecture.
 - **Luau:** primary portable scripting; independent of native plugins; both share
   controlled engine services. Luau APIs must not be required by native extensions.
 
@@ -83,7 +139,10 @@ Severed Chains' enhancements and modding capabilities.
 
 - CMake + Ninja; clean-clone build procedure documented per platform
   (Windows, Linux, macOS/Apple Silicon).
-- All project-owned targets built with exceptions disabled (see above).
+- All project-owned targets built with exceptions disabled (see above); public API
+  targets additionally built with RTTI disabled (see above).
+- `scpsx` compiles standalone (no engine/SDL/Qt/Luau dependencies) — enforced by the
+  build system (build-system.md).
 - Pinned, stable dependency versions; straightforward builds; avoid unnecessary
   Git submodules.
 - Shader pipeline must produce backend-appropriate artifacts (SPIR-V / Metal / DXIL)

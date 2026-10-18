@@ -117,10 +117,10 @@ Combat.Animation.play(entity, "anm-ref", {speed=, loop=, onComplete=})
 ```
 
 - The combat engine consumes these through the same evaluator interface the
-  C ABI exposes (`sc.combat` table in native-api.md §7) — **one implementation,
-  two front ends** (Luau and native plugins interoperate: a native plugin can
-  read which evaluator an addition uses; a Luau mod can react to combat
-  events fired natively).
+  C++23 plugin API exposes (`sc::CombatApi::AdditionInputEvaluator`,
+  native-api.md §7) — **one implementation, two front ends** (Luau and native
+  plugins interoperate: a native plugin can read which evaluator an addition
+  uses; a Luau mod can react to combat events fired natively).
 - **Timing guarantee:** `evaluate` is called exactly once per sim frame during
   the window (same call site as Java's per-frame `isActionPressed` check), so
   window bounds remain frame-exact with the original.
@@ -164,8 +164,8 @@ my-mod/                     # or my-mod.zip (same layout)
      track in a mod-porting backlog with the community.
 - **Native + Luau independence** (requirement): a mod may ship only Luau,
   only native, or both. They share the same event/registry/config services;
-  no mutual dependencies (native plugins must not require Luau — the C ABI
-  has no Luau symbols; the engine mediates).
+  no mutual dependencies (native plugins must not require Luau — the C++
+  plugin API has no Luau symbols; the engine mediates).
 
 ## 6. Luau Dependency
 

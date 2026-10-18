@@ -1,0 +1,70 @@
+# Severed Chains Native — project-wide formatting
+# Baseline: LLVM, with the project overrides below. Run: clang-format -i <file>
+# Do NOT mass-reformat files you haven't touched.
+BasedOnStyle: LLVM
+IndentWidth: 4
+UseTab: Never
+TabWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+AccessModifierOffset: -2
+AlignTrailingComments: true
+AllowAllArgumentsOnNextLine: true
+AllowAllConstructorInitializersOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+AlwaysBreakBeforeMultilineStrings: true
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Attach
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: BeforeComma
+BreakStringLiterals: true
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+Cpp11BracedListStyle: true
+DeriveLineEnding: true
+FixNamespaceComments: true
+IndentCaseLabels: true
+IndentExternBlock: NoIndent
+IndentPPDirectives: AfterHash
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+PointerAlignment: Left
+ReflowComments: false  # keep Doxygen @param/@return blocks exactly as written
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<sc/'
+    Priority: 2
+  - Regex: '^<psx/'
+    Priority: 3
+  - Regex: '^<(SDL[^.]*\.h|SDL3/)'
+    Priority: 4
+  - Regex: '^<(luau|lauxlib)\.h$'
+    Priority: 5
+  - Regex: '^<(GLM/|glm/)'
+    Priority: 6
+  - Regex: '^<entt/'
+    Priority: 7
+  - Regex: '^<[a-z_]+\.h>?$'
+    Priority: 10  # system headers (cstdint, vector, ...)
+  - Regex: "^['\"]"
+    Priority: 1  # project-local quoted includes (" or ') first
+SortUsingDeclarations: true
+SpaceAfterCStyleCast: false
+SpaceBeforeCpp11BracedList: false
+SpaceInEmptyParentheses: false
+# The project C++ standard is 23 (compiler-controlled, see build-system.md);
+# clang-format's Standard option only affects formatting heuristics — use the
+# highest value your clang-format build accepts (c++23 on newer toolchains).
+Standard: c++20
+UseCRLF: false

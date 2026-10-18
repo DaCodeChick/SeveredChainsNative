@@ -16,6 +16,13 @@ maintenance and explicit approval.
 | Qt 6 | pin current LTS (Core/Gui/Widgets [+Network for launcher]) | **LGPL v3** (or commercial) | launcher, settings, mod manager, debugger, asset inspector | **Licensing: dynamic linking required for LGPL compliance** (engine already a shared lib; tools link dynamically). No static Qt. See licensing.md |
 | CMake ≥ 3.28 + Ninja | any recent | BSD/GPL (build-time) | build | build-time only |
 
+**In-repo reusable libraries (not third-party — no approval needed):**
+
+| Library | Deps | Role | Notes |
+|---|---|---|---|
+| `scpsx` (psx-library.md) | **none** (C++23 std only) | GTE, PS1 GPU semantics + software reference rasterizer, SPU model, XA/SSSq, ISO9660, TMD/TIM/ANM/MRG/DEFF/BPE/Tag, script dis/asm tooling | zero-dep is a hard build rule; consumed by engine, game, tools, fate CLI |
+| `scdabas` (dig-dabas.md §5) | **none** (C++23 std only) | Mogul Dabas minigame (handheld console + game logic port) | host-interface driven; linked into scgame |
+
 ## 2. Requiring Approval (identified by research)
 
 | Dependency | License | Purpose | Alternatives considered | Portability/maintenance | Verdict asked |
@@ -27,6 +34,7 @@ maintenance and explicit approval.
 | **libopus** *(only if XA→Opus parity is kept)* | BSD | streaming CD audio in the low-latency/small-size form the Java pipeline produces at unpack | **(recommended alternative)** transcode XA→PCM/WAV at unpack (no new dep; ~2-3× file size; SDL3 audio streams it fine); or decode XA at runtime (we port XaAdpcm; resampling CPU cost) | Mature (IETF, used everywhere); but adds a runtime codec | **Decision needed from user**: keep Opus parity (approve libopus) or switch the unpack cache to PCM/WAV (no new dep). Research recommendation: **PCM/WAV for v1** (simplest, zero new deps, audio fidelity identical — it's the same PCM the Java player would mix; size is acceptable: ~100MB of CD audio at 48kHz/16bit/2ch for the full game — verify at implementation; the Java pipeline's Opus choice was for download size in their distribution model, which we don't have) |
 | **libcurl or engine HTTP** *(for the launcher updater)* | MIT (libcurl) / OpenSSL | GitHub release update check (Java `Updater` parity) | SDL3 has no HTTP; a minimal HTTPS client needs TLS → libcurl is the standard answer; alternatively drop auto-update in v1 (users get updates via package manager / manual download) | Mature; native SSL backends per platform | **Decision needed**: auto-update in v1? If yes → approve libcurl (+ platform TLS). Recommendation: **yes for the launcher** (it's a flagship Java feature users rely on — the title-screen "Update Available" button) |
 | **ffmpeg/libav** *(only if disc FMVs must play)* | LGPL/GPL | video decoding for original FMV cutscenes (`Fmv`/`VideoPlayer` parity; Java uses javacv/ffmpeg) | the Java game *also* ships a bundled intro MP4 (human-made) — v1 could ship the intro as a texture sequence or a bundled video via an SDL_video-like approach... SDL3 has no video decode. **Scope note:** FMVs are *disc* assets; the intro.mp4 is bundled. If FMV support is out of v1 scope (story cutscenes without video — the game is fully playable; FMVs are a few boss/transition clips), no dependency needed for v1 | Mature but heavy + GPL considerations (LGPL build possible) | **Decision needed**: FMV support in v1? Recommendation: **out of v1** (document the gap; the intro screen can use a bundled MP4 decoded by... — see below). If even the intro MP4 is desired: prefer re-authoring the intro as an animated texture sequence (no dep) or accept libav (LGPL) — user decision |
+| **ANTLR4 C++ runtime** *(only if the fate compiler reuses the Java grammar mechanically — Q-SCR-1)* | LGPL-2.1+ (C++ runtime) | compile the reference's `FateLexer.g4`/`FateParser.g4` unmodified for the fate compiler (script-recompiler.md §6) | **(recommended alternative)** hand-rolled recursive-descent parser for the small, known fate grammar — no new dependency; validated by golden tests against Java-compiled outputs. Note the ANTLR C++ runtime is an **exception-using C++ library** that would be *runtime*-linked (the fate compiler runs in-engine at unpack time, not just build-time) — it would become another exception-behavior register entry in addition to Qt. This is a strong argument for the hand-rolled parser | Hand-rolled parser: ~1–2k LOC for this grammar (bounded terminal set), maintained in-repo, trivially reviewable | **Decision needed**: approve ANTLR4-C++ (LGPL, runtime-linked, exceptions-internal) or confirm the **recommended hand-rolled fate parser (no new dependency)** |
 
 ### Summary: approvals requested
 1. glslang (build-time) — needed for the mandated shader pipeline.
@@ -36,6 +44,13 @@ maintenance and explicit approval.
 5. (decision) libopus vs PCM/WAV unpack cache.
 6. (decision) libcurl for launcher auto-update.
 7. (decision) ffmpeg/libav for FMVs (recommend: out of v1).
+8. (decision, **new in Phase 0 follow-up**) fate compiler: ANTLR4-C++
+   (LGPL-2.1+, runtime, exceptions-internal) vs **recommended hand-rolled
+   parser (no new dependency)** — script-recompiler.md Q-SCR-1.
+
+No new dependencies are introduced by the Phase 0 follow-up architecture
+changes (PSX library, C++23 plugin API, Dabas minigame) — all of it is
+in-repo code with the C++23 standard library only.
 
 ## 3. Third-Party Exception-Behavior Register (per requirement §3)
 

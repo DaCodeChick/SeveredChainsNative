@@ -16,9 +16,10 @@
   2.1/Apache dual), discord-sdk4j (see its repo), javacv/ffmpeg (LGPL/GPL
   mix), opencsv (Apache 2.0), java-diff-utils (Apache 2.0), commons-io
   (Apache 2.0), slugify (MIT), JSR-305 (Apache 2.0), stb (public domain),
-  plus the org.legendofdragoon jitpack libs (their repos — **licenses not
-  verified locally; document as a gap to check in their repos before
-  reusing any of their code/tables**).
+  plus the org.legendofdragoon jitpack libs (Mod-Loader `c692134`,
+  Script-Recompiler `3433e6f`, Dig-Dabas `4c1fbfe` — **all three inspected
+  read-only in the Phase 0 follow-up; all AGPL-3.0, verified** — see
+  docs/research/mod-loader.md, script-recompiler.md, dig-dabas.md).
 
 ## 2. Status of This Project
 
@@ -57,11 +58,13 @@
    to.
 4. **Copyleft:** derivative works of *our* code must be AGPL. Users who
    link our AGPL engine into their own mod tools/plugins: **plugins are
-   separate works** — the C ABI boundary (native-api.md) is designed so
-   that a mod's plugin is a standalone program communicating with ours
-   (AGPL §4/§5 analysis: the boundary must be "at arm's length" — our C
-   ABI with opaque handles + message-style function tables satisfies this
-   for the intended use; document this analysis in the plugin docs).
+   separate works** — the C++23 plugin API boundary (native-api.md) is
+   designed so that a mod's plugin is a standalone program communicating
+   with the engine through a stable, documented, versioned interface
+   (AGPL §4/§5 analysis: the boundary must be "at arm's length" — the
+   frozen interface classes + toolchain contract + opaque engine objects
+   satisfy this for the intended use; document this analysis in the plugin
+   docs).
 5. **Attribution:** preserve the credits; the native README should credit
    Severed Chains (Java) as the behavioral reference and list the original
    project's authors (parity with `credits.txt`).
@@ -118,12 +121,14 @@ not a policy violation.
    posture is acceptable to the reference project's maintainers (good
    faith: they may want attribution language; `credits.txt` parity is
    planned).
-3. The org.legendofdragoon jitpack libraries' licenses (mod-loader,
+3. ~~The org.legendofdragoon jitpack libraries' licenses (mod-loader,
    script-recompiler, mogul-dabas) — verify before reusing *their code or
-   data tables* (we plan clean reimplementation, but the fate *format*
-   compatibility and the DABA `Save60` *layout* are derived from them;
-   formats/layouts themselves are generally not copyrightable, but their
-   code is — keep clean-room discipline and cite sources in docs).
+   data tables*~~ — **RESOLVED (Phase 0 follow-up)**: all three source
+   repositories inspected (commits above); all AGPL-3.0. Our clean
+   reimplementation inside this AGPL project + attribution is the copyleft-
+   compliant posture. Residual note: the reference build's bundled
+   `patches/` corpus + meta CSVs are *data* — when the native port ships
+   equivalent data, keep attribution to the source project (credits).
 4. Proprietary game data: reconfirm the user-supplied-disc model for all
    platforms (including any online update path — the updater must never
    fetch game data).

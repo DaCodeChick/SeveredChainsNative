@@ -63,9 +63,15 @@ flag on dev builds, resource RAII wrappers + deferred-deletion scaffold,
 fence-based correctness (submit + fence wait).
 
 **Prerequisites:** M1; **G2** (PNG for the test quad); shader tools or a
-single hand-compiled test shader per backend.
+single hand-compiled test shader per backend. **Also starts `scpsx`**
+(psx-library.md): the independent PSX library target lands now with its
+first modules (`psx::bpe`, `psx::xa`, `psx::tag`, `psx::gte`) so the
+golden suite (testing.md §2.11) is green from the library's first commit —
+scpsx is dependency-free and needs no GPU/SDL, so it proceeds in parallel
+with the graphics work.
 **Deliverables:** `scengine` GPU layer; test scene rendering on the
-default backend; pipeline-creation smoke test infrastructure.
+default backend; pipeline-creation smoke test infrastructure; `scpsx`
+target + initial modules + standalone `sc-tests-psx`.
 **Acceptance:**
 - Textured quad + triangle render correctly on at least Vulkan (Linux),
   Metal (macOS), D3D12 (Windows) — with SPIR-V-only artifacts acceptable
@@ -139,18 +145,21 @@ sim step 30/60Hz from vsyncMode + speed multiplier — engine-design §3;
 presentation double-frame for 30Hz), full input (port of the action model
 incl. repeat/hold/axis state, keybinding config entries, rumble + lerp),
 **audio foundations** (SDL3 audio device + device enumeration/hot-swap;
-audio thread; SFX `Spu` port — 24 voices, edge key control, FM/noise/reverb,
-cubic resample, 60TPS; volume model master×(music|sfx); XA/PCM streaming
-player per G3 decision; **music synth port** (`AudioThread`+`sequencer`
-— 120Hz software PS1 SPU, SSSQ/SShd decoding, interpolation/pitch/granularity
+audio thread; SFX engine driving the **`psx::spu` voice processor** — 24
+voices, edge key control, FM/noise/reverb, cubic resample, 60TPS; volume
+model master×(music|sfx); XA/PCM streaming player per G3 decision decoding
+via **`psx::xa`**; **music synth port** (`AudioThread`+`sequencer`
+— 120Hz scheduling over `psx::spu` voices, **`psx::sssq`** SSSQ/SSHD
+parsing, interpolation/pitch/granularity
 config)), **EnTT integration** (registry wrappers, component conventions,
 scene contexts, view processing order — engine-design §4.4),
-**registry + event bus** (all core registries from the Java catalog;
-synchronous bus with cancel + per-listener isolation; config entries
-registry-driven; i18n key/override model), **story-script VM port**
+**registry + event bus** (all core registries from the Java catalog —
+semantics verified in mod-loader.md; synchronous bus with cancel +
+per-listener isolation; config entries registry-driven; i18n key/override
+model, 4-level specificity), **story-script VM port**
 (`OpType`/`ScriptState`/params — execution; function registry
-`ScriptFunctionRegistry` with the retail function set; fate patching NOT
-yet — that's M12 tooling).
+`ScriptFunctionRegistry` with the retail function set; fate patching is
+M6 — it runs at unpack time in the reference, verified).
 
 **Prerequisites:** M4 (VM + content need rendering to be observable; audio
 is independent), G3.
@@ -161,7 +170,7 @@ asset manager), EnTT scene test, registry/event integration test, script
 VM executing a retail script (log-driven, no visual yet).
 **Acceptance:**
 - Timing: sim tick rate measurement at vsyncMode 1/2 × speed 1/2/4/16 within
-  ±2% (testing.md §2.12); timestamp accumulation parity.
+  ±2% (testing.md §2.15); timestamp accumulation parity.
 - Audio: SFX key-on latency <2 audio ticks; music output PCM golden diff vs
   Java reference (fixed seed/sequence) within documented tolerance;
   device hot-swap works; no audio-thread stalls (TSAN clean).
@@ -177,30 +186,41 @@ VM executing a retail script (log-driven, no visual yet).
 ## Milestone 6 — Asset Pipeline
 
 **Scope:** full unpacker port (asset-pipeline.md §4): ISO9660 reader
-(4-disk merge, region IDs), BPE decompressor (vectorized), MRG/DEFF
-archives, SMAP overlay extraction (fixed offsets), engine overlay split,
+(4-disk merge, region IDs) via **`psx::cdrom`**, BPE decompressor
+(vectorized) via **`psx::bpe`**, MRG/DEFF archives via **`psx::archive`**,
+SMAP overlay extraction (fixed offsets), engine overlay split,
 the per-file patcher set (each = a documented data fix; ported 1:1),
 replacement chain (mod overrides → base — runtime, replacing
 unpack-time replacements), `files/`-equivalent cache (versioned by format
 version + disc hashes; rebuildable; low-memory/file-backed mode parity),
-async loader (task handles, error results), **decoders**: TMD/CTMD→mesh IR,
-TIM/DABA→tex15/tex24 upload layout (absolute VRAM coords, stitching), ANM,
-CContainer (+CLUT animations), MCQ, SShd/SSSq (for M5 audio), XA→cache
-format (per G3), Tag full serializer (saves use it in M8), memcard (DABA
-Save60) reader, save-card texture extraction, `DrgnFiles` index caching.
-Script-patching (fate) is M12; the loader must consume *already-patched*
-script trees (the Java unpack output layout is the compatibility target).
+async loader (task handles, error results), **decoders**: TMD/CTMD→mesh IR
+(**`psx::tmd`**), TIM/DABA→tex15/tex24 upload layout (absolute VRAM coords,
+stitching; **`psx::tim`**), ANM (**`psx::anm`**), CContainer (+CLUT
+animations) + MCQ (game/ — LoD-only containers, emit psx IR), SShd/SSSq
+(**`psx::sssq`**, for M5 audio), XA→cache format (per G3, `psx::xa`), Tag
+serializer (**`psx::tag`**; saves use it in M8), memcard (DABA Save60)
+reader, save-card texture extraction, `DrgnFiles` index caching. **Fate
+script-patching pipeline at unpack time** (verified reference behavior —
+script-recompiler.md §5): `psx::script` disassembler/assembler + canonical
+text codec, in-repo unified-diff component, the native **fate compiler**
+(hand-rolled per the Q-SCR-1 recommendation — approval pending), bundled
+meta CSVs, `scripts.csv` patch lists, backup/cache/CRC-of-includes
+invalidation + restore-on-deletion (parity with `ScriptPatcher`). The
+`fate` *CLI tool* is M12; the pipeline itself is M6.
 
 **Prerequisites:** M5 (loader feeds sim), G3.
-**Deliverables:** `scengine/ps1` decoder suite + `assets/` manager; unpack
-CLI path (first-run unpacker with status callback — port of the
-`Unpacker` UX: wait-for-discs, per-file transform progress, version
-file); asset error taxonomy live (specific Status per malformed class).
+**Deliverables:** scpsx decoder suite complete (psx-library.md §2) +
+`assets/` manager; unpack CLI path (first-run unpacker with status
+ callback — port of the `Unpacker` UX: wait-for-discs, per-file transform
+progress, version file); **fate patch pipeline** (applied to the shipped
+patch corpus → patched tree byte-identical to the Java unpacker's output);
+asset error taxonomy live (specific Status per malformed class).
 **Acceptance:**
 - Unpack a real 4-disc set (opt-in data) → `files/` tree **byte-identical**
-  to the Java unpacker output (tree diff; version file matches).
-- Decoder golden tests (synthetic + real fixtures, testing.md §2.5) all
-  pass; every malformed-class → specific Status.
+  to the Java unpacker output (tree diff; version file matches) — **incl.
+  the fate-patched script tree** (all `scripts.csv` entries applied).
+- Decoder golden tests (scpsx standalone suite — synthetic + real fixtures,
+  testing.md §2.11) all pass; every malformed-class → specific Status.
 - Load-time: all title-screen assets load (fonts, UI png, title TMDs,
   shadow model, save card textures) with async completion tracking.
 - Unpacker performance: ≤ Java unpack time on the same machine (measured;
@@ -216,15 +236,18 @@ report; manual first-run UX pass on 3 OSes.
 batches + 4-pass ordering + sorting (port `RenderEngine` frame flow
 exactly), model queue system (QueuedModel equivalents: standard/tmd/
 battle_tmd, per-model transforms2/lighting 128-blocks upload, CLUT
-animation UBO, per-draw uniforms), cameras (camera2d/3d, GTE-derived view
-matrices, `worldToScreenMatrix`), projection (PS1 H-division + modern +
+animation UBO, per-draw uniforms), cameras (camera2d/3d, **`psx::gte`**
+derived view matrices, `worldToScreenMatrix`), projection (PS1 H-division +
+modern +
 ortho, screen offset order, widescreen ortho offset, 4:3 letterbox,
 resolution-snap-to-240), text rendering (fonts, textboxes, textZ), UI
 quads (MCQ menus, line/quad/poly builders), TMD/CTMD model rendering
 (incl. battle uniform lighting + ctmdFlags), translucent two-pass quirk,
 in-shader scissor, post/`screen` shader (full CRT chain + turn_order_bounds
 hook — the mod uniform is exposed now so M10+ mods can use it), **software
-GS fidelity mode** (port `Gpu`+`tmd.Renderer` legacy path — the parity
+GS fidelity mode** (the `Gpu`+`Graphics` software rasterizer runs from
+**`psx::gpu`** — the port lands in M7 as part of scpsx; legacy path +
+`worldToScreenMatrix` usage — the parity
 reference oracle), free-cam + debug keys (pause/frame-advance/wireframe/
 shader-reload; render-mode TAB cycling: OpenGL/legacy/VRAM), Discord
 presence (optional, G-independent — via a small HTTP-free stub or
@@ -237,7 +260,7 @@ keyboard/gamepad but does *nothing* yet — states land in M8); field scenes
 load and render with navigation-free camera; a battle arena renders with
 models + addition overlay geometry (no combat logic yet).
 **Acceptance:**
-- Golden screenshot suite (testing.md §2.12): title, field (HQ + legacy +
+- Golden screenshot suite (testing.md §2.15): title, field (HQ + legacy +
   VRAM modes), battle arena, translucent-heavy scene, CRT on/off, 4:3 and
   widescreen — native-vs-Java diff within tolerance, visual review of the
   rest.
@@ -269,17 +292,28 @@ system, `Menus` port: inventory/equipment/items screens, shops,
 save/load screens), **Saves** (Tag V10 full, migrators, per-save configs,
 memcard import, crash recovery save, `SavedGame`/`Campaign` model,
 Write/ReadSaveData events), story scripts live (VM drives events: flags,
-cutscene triggers, object on/off, engine-state transitions), encounters
+cutscene triggers, object on/off, engine-state transitions), **Mogul
+Dabas minigame** (scdabas port: handheld console — timers/RTC/interrupts/
+power/DAC/32×32 1bpp framebuffer, host-driven fixed-step ticks per
+dig-dabas.md Q-DAB-2; game-logic port with ROM data tables; the host
+adapter (render hijack, 5-button input mapping, mono8 audio source,
+`dabas_save_data` config blob — byte-exact 0x260 layout), `DabasScreen`
+in the in-game menu, `DabasRewardsEvent` rewards flow; crash→error-result
+isolation parity), encounters
 triggered into the battle *stub* (battle logic = M9).
 
 **Prerequisites:** M7 (everything renders), M5 (VM, timing, registries).
 **Deliverables:** playable field game: title → new game → submap
-navigation through story → dialogue → inventory/shops → save/load (V10
+navigation through story → dialogue → inventory/shops → **Dabas minigame
+(usable + savable)** → save/load (V10
 byte-compat) → world map → encounter triggers battle (stubbed battle).
 **Acceptance:**
 - Play the opening (title → first submap → first dialogue → save → reload →
   world map) end-to-end with no crash, save byte-compatible with a Java
   save of the same point (diff).
+- Dabas: a scripted dig session (fixed input tape) reproduces the Java
+  session's rewards (testing.md §2.13); save blob byte-identical to a
+  Java-produced blob; a VM fault reports the error and the game continues.
 - Script-gated content works (a scripted object/cutscene sequence plays;
   flag reads via the script VM verified).
 - State transitions: all EngineStateChangeEvents fire with correct
@@ -350,14 +384,18 @@ load order, asset override chain live, lang overrides, enabled-set),
 **Luau host** (per-mod VMs, sandbox/limits per luau-api §1, protected-call
 boundary, bytecode precompile cache, all namespaces implemented:
 Engine/Assets/Input/Render/Combat/Characters/Items/Saves/Audio/Script/Mod —
-full parity surface luau-api §3), **native plugin host** (C ABI live per
-native-api.md: interface root + tables `sc.gameplay/events/input/render/
-assets/save/script/combat/audio/log`, dlopen/LoadLibrary, version
-negotiation, lifecycle state machine, failure UX parity, handle-leak
-checks, sample plugin), **the "lod" content module** is now fully
+full parity surface luau-api §3), **native plugin host** (the **C++23
+plugin API** live per native-api.md: `sc-sdk` (frozen interface headers +
+toolchain file), entry-symbol discovery (`scPluginCreateV<N>`), toolchain-
+parity check, capability interfaces `sc::GameplayApi/EventsApi/InputApi/
+RenderApi/AudioApi/AssetsApi/SaveApi/ScriptApi/CombatApi/LogApi`,
+dlopen/LoadLibrary, version negotiation, lifecycle state machine, failure
+UX parity, handle-leak
+checks, sample plugin built with the SDK toolchain file), **the "lod"
+content module** is now fully
 reachable by mods (content registered only through the APIs — audit that
 no retail path bypasses the registries), **script functions** registered
-by mods (Luau `Script.registerFunction` + native `sc.script`), combat
+by mods (Luau `Script.registerFunction` + native `sc::ScriptApi`), combat
 evaluator seam exercised (a Luau button-sequence addition works in a test
 battle — the Playable-Lloyd scenario), mod error isolation (compile/runtime
 errors → mod disabled, game continues, reported), save `modData` slots
@@ -422,10 +460,12 @@ options-menu full pass; update-flow script test.
 
 ## Milestone 12 — Advanced Modding
 
-**Scope:** **fate pipeline** (reimplementation of the script-recompiler
-equivalents: disassembler/assembler/compiler/patcher CLI (`fate` tool) —
-format parity with Java's fate output: round-trip identity tests on real
-scripts; meta CSV-driven patches; cache/backups layout parity; a Luau mod
+**Scope:** **fate tooling** (the `fate` CLI — the `Shell` equivalent — on
+top of the M6 pipeline: `psx::script` disassembler/assembler + the native
+fate compiler + the unified-diff component; commands
+versions/decompile/compile/genpatch/applypatch/undopatch/strip; format
+parity with Java's fate output: round-trip identity tests on real
+scripts; meta CSV-driven patches; a Luau mod
 shipping fate patches works), **custom characters** end-to-end (a full
 new character: template + stats + additions + spells + element + portraits
 + models + animations + battle behavior, all via mod APIs — the flagship
@@ -473,8 +513,9 @@ docs alone — the real acceptance test of the docs + APIs).
 
 1. **Native-API & Luau from the start (task §20):** the *designs* are
    finalized (Phase 0 docs); the *registry/event/entry data model* they
-   expose is built M5; the C ABI surface is stable from M10 but its data
-   types (POD structs, RegistryId strings, event ids) are used internally
+   expose is built M5; the **C++23 plugin API** (native-api.md) is stable
+   from M10 but its data types (value structs, `RegistryId` strings, event
+   ids) are used internally
    from M5 — no rework expected, and any change before M10 is free.
 2. **Golden-value generation** (from the Java reference) is a recurring
    Phase 1 task: run the Java reference (user's discs, headless where

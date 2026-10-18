@@ -62,8 +62,10 @@ measurements; propose tools only when necessity is established.
   corruption — golden data check); stress: 10k create/destroy cycles.
 - TSAN run of the audio thread + async loader (dedicated CI job).
 
-### 2.5 Asset decoding (ps1/ formats)
-- **Round-trip tests per decoder** with synthetic + reference fixtures:
+### 2.5 Asset decoding (psx/ formats — scpsx, standalone)
+- Runs in the standalone `sc-tests-psx` target (links scpsx only — the full
+  suite, incl. GTE/GS goldens, is §2.11). **Round-trip tests per decoder**
+  with synthetic + reference fixtures:
   BPE (compress→decompress identity on known data; the decompressor on a
   captured real BPE segment from a user-provided disc, opt-in lane), MRG
   (incl. virtual entries + sector-aligned), DEFF, TIM (all BPPs, CLUT/no
@@ -120,27 +122,94 @@ measurements; propose tools only when necessity is established.
 - Bytecode cache: version-keyed (Luau version bump → cache miss → recompile).
 - Performance: per-frame hook overhead budget test (<50µs typical, p99).
 
-### 2.9 Native ABI & plugin lifecycle
-- **ABI stability tests** (the "native ABI compatibility" requirement):
-  sample plugin compiled against API v1 loads against engine vN; table
-  `get_table` versioning (unknown table → NULL, known → works); struct
-  size checks; string lifetime rules (engine doesn't hold plugin strings
-  past the call — ASAN detectable).
-- **Lifecycle tests**: discover → validate (bad manifest, missing dep,
-  version mismatch, cycle) → load → init (success + failure injection) →
-  ready → shutdown (handle-leak check) → unload; plugin crash isolation is
-  *documented not testable in-process* (covered by the contract tests +
-  the out-of-process future work).
-- **Fuzzing** (dedicated `sc-fuzz` binary, libFuzzer): every C ABI entry
-  with random args; every decoder with random/truncated buffers; Tag parser;
-  config parser. Run in CI (time-boxed) + ASAN/UBSAN.
+### 2.9 Native plugin API & plugin lifecycle (C++23)
+- **ABI stability tests** (the "native ABI compatibility" requirement,
+  native-api.md §9.4): sample plugin compiled against SDK v1 (same
+  toolchain) loads against engine vN and passes functional tests; interface
+  versioning (`api.table<T>()` — unknown id/version → nullopt, known →
+  works); **frozen-layout probe** — `static_assert`s on size/offset of every
+  frozen SDK type, compiled against the SDK *and* the previous engine's SDK
+  headers (CI catches drift); string lifetime rules (engine doesn't hold
+  plugin strings past the call — ASAN detectable).
+- **Toolchain-parity tests**: a plugin built with a *different* compiler
+  family than the engine (toolchain hash mismatch) is **refused at load**
+  with a clear diagnostic (negative test, per platform matrix); the SDK
+  compile probes (throw / dynamic_cast TUs must fail to compile) run on the
+  SDK headers with every CI compiler.
+- **Lifecycle tests**: discover (entry symbol lookup V-max..V1) → validate
+  (bad manifest, missing dep, version mismatch, toolchain mismatch, cycle)
+  → load → init (`onLoad` success + failure injection) → ready → shutdown
+  (handle-leak check) → unload; plugin crash isolation is *documented not
+  testable in-process* (covered by the contract tests + the out-of-process
+  future work).
+- **Fuzzing** (dedicated `sc-fuzz` binary, libFuzzer): every plugin API
+  surface exercised through a fuzz-host plugin with random args; every
+  decoder with random/truncated buffers; Tag parser; config parser; unified-
+  diff applier (fuzzed patch text). Run in CI (time-boxed) + ASAN/UBSAN.
 
 ### 2.10 Mod dependency resolution
-- Unit: semver range matching (port Java's `^x.y.z` semantics), dependency
-  closure, cycles, missing deps (→ skip + report), duplicate ids, load
-  order determinism (alphabetical + dependency order, golden test).
+- Unit: semver range matching (port Java's `^x.y.z` semantics — golden-test
+  against semver4j NPM-mode fixtures: `^`, `~`, comparators, prerelease
+  edge cases; mod-loader.md §2), dependency closure, cycles, missing deps
+  (→ skip + report), duplicate ids, load order determinism (alphabetical +
+  dependency order, golden test).
 
-### 2.11 Cross-platform consistency
+### 2.11 PSX library (scpsx) — standalone golden suite
+
+`sc-tests-psx` links **scpsx only** (no engine/SDL/Qt) — the fastest test
+surface in the repo, and the parity backbone (psx-library.md):
+- **GTE math**: every op (RTPS/NCLIP/NCCS/AVSZ/MAC3/... ) against Java
+  `Gte` outputs for a fixed input matrix (exact 32-bit integer equality —
+  GTE is integer-fixed-point; no float tolerance needed); flag accumulation
+  sequences; the camera-matrix derivations used by submap/battle cameras.
+- **Software GS (psx::gpu)**: render a fixture scene → **byte-identical**
+  to the Java `Gpu`/`Graphics` output (the parity oracle, rendering-
+  analysis.md): ordering-table draws, top-left rule, every blend mode
+  (incl. B+1/4F), per-primitive constant depth, CLUT/chroma-key paths.
+- **Decoders**: BPE (compress→decompress identity + captured real segment),
+  MRG (virtual entries, sector alignment), DEFF, TIM/DABA (all BPPs),
+  TMD/CTMD (all primitive classes + `ctmdFlags`), ANM, XA (**sample-exact
+  PCM vs the Java `XaAdpcm`/`XaTranscoder` fixtures, incl. the 312 pre-skip**),
+  SShd/SSSq parse, ISO9660 tree (synthetic disc fixture), Tag
+  (serialize/deserialize identity + real save bytes, opt-in lane).
+- Malformed input: truncation/corruption at every offset class → the
+  specific `psx::Error` code (fuzzed — §3).
+
+### 2.12 Script tooling (psx::script + fate)
+- **Round-trip**: disassemble→assemble == identity (byte-exact) on the full
+  retail script set (opt-in data lane) + a synthetic-script corpus in-repo
+  covering every op/param type, pointer-table overruns, LodStrings, fork/jmp
+  tables.
+- **Translator/Tokenizer**: text format round-trip (bytes → text → bytes),
+  canonical-form stability (the patch contract — a re-run of translate on
+  already-patched output is a no-op).
+- **Unified diff component**: generate/apply/undo on fixture text (3 context
+  lines, fuzz tolerance = none, failure → specific error); `call`-normalization
+  (index↔name via meta) golden tests; the full reference patch corpus
+  (`patches/scripts.csv` + all `.diff`/`.txt`) applies to the unpatched
+  scripts and produces **byte-identical output to the Java unpacker's
+  patched tree** (opt-in data lane — the strongest fate-pipeline proof).
+- **Fate compiler** (hand-rolled, per Q-SCR-1 recommendation): compile the
+  reference `patches/scripts/*.txt` fate files → byte-identical to the
+  Java FateCompiler output (goldens); plus synthetic programs (control flow,
+  functions, enums, includes, errors → structured diagnostics, no exceptions).
+
+### 2.13 Mogul Dabas minigame (scdabas)
+- **Console semantics**: timer/RTC/interrupt/power/DAC behavior unit tests
+  (fixed-step host-driven ticks per dig-dabas.md Q-DAB-2 decision);
+  32×32 1bpp framebuffer inversion parity with the Java host adapter.
+- **RNG**: LCG+mix32 sequence identity (N draws from seed 1 == Java
+  `dabas.core.Random` fixture — generated from the reference; distinct from
+  the main-game RNG test).
+- **Save byte-exactness**: `Save60` + tile grid (0x260 blob, grid layout per
+  Q-DAB-4) serialize/parse identity + a Java-produced save round-trip.
+- **Game logic**: a scripted input tape (5 buttons over N ticks) drives a
+  fresh dig → rewards (gold/items/special) compared to a Java-session
+  fixture (opt-in data); crash-isolation: an injected VM fault returns an
+  error result and the host continues (parity with the Java
+  try/catch-shutdown — the native error-path analog).
+
+### 2.14 Cross-platform consistency
 - **Golden output tests**: (a) BPE/MRG/TIM/TMD decode → byte-identical
   across OS/ABI (fixtures in repo); (b) GTE math → identical floats
   (32-bit arithmetic, no FMA contraction — compile with `-ffp-contract=off`
@@ -149,7 +218,7 @@ measurements; propose tools only when necessity is established.
   SPIR-V hash across OS (tool pinned).
 - CI matrix runs the golden suite on Win/Linux/macOS (arm64).
 
-### 2.12 Rendering fidelity (measurement, not assumption)
+### 2.15 Rendering fidelity (measurement, not assumption)
 - **Golden screenshots** (Milestone 7): fixed camera poses + fixed RNG +
   fixed clock → render N frames → compare against Java reference captures
   (per-scene: title, field (legacy + HQ projection), battle menu, addition
@@ -168,7 +237,7 @@ measurements; propose tools only when necessity is established.
 
 | Tool | Necessity |
 |---|---|
-| libFuzzer (Clang) / AFL++ (GCC) | established: 6+ external-format parsers + C ABI surface |
+| libFuzzer (Clang) / AFL++ (GCC) | established: 6+ external-format parsers + plugin API surface + unified-diff applier |
 | ASAN/UBSAN/TSAN (compiler) | established: audio thread + async loader + plugin boundary |
 | RenderDoc capture (Windows/Linux) + Xcode Metal capture (macOS) + D3D12 debug layer + Vulkan validation layers | established: SDL3 GPU debugging (per SDL docs; no new dependency — platform SDK facilities) |
 | `perf`/Instruments/WTProfiler (platform profilers) | established: measurement-based performance work |

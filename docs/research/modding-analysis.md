@@ -11,8 +11,9 @@ Paths relative to `~/Documents/GitHub/Severed-Chains`.
   matches against `Version.VERSION` — wrong versions reported via
   `MODS.getWrongVersions()` and shown as overlay notifications).
 - `@EventListener`-annotated methods subscribe to the event bus (`EventManager`).
-- Class-loading: standard Java classloader per mod (mod JARs on the classpath);
-  failed loads tracked in `MODS.getFailedToLoad()` (modId → error), surfaced in
+- Class-loading: **one shared `URLClassLoader` over all mod JARs** (no per-mod
+  isolation — mods can see each other's classes; verified in mod-loader.md §2).
+  Failed loads tracked in `MODS.getFailedToLoad()` (modId → error), surfaced in
   the title screen and crash logs.
 - **Retail content is a mod**: `legend.lodmod.LodMod` (`@Mod(id = "lod")`)
   registers all game content — characters, stats, elements, additions, items,
@@ -29,14 +30,22 @@ Paths relative to `~/Documents/GitHub/Severed-Chains`.
 
 ### 2.1 Registries (external mod-loader + in-repo `Registries`)
 
+> mod-loader internals now **verified from source** (`~/Documents/GitHub/Mod-Loader`,
+> commit `c692134`) — see `docs/research/mod-loader.md` for exact semantics.
+
 - `Registries` (core, `legend.core.Registries`) holds the engine's registry set:
   `config`, `campaignTypes`, `engineStateTypes`, `inputActions`,
   `characterTemplates`, `statTypes`, `statModTypes`, `goods`, plus mod-added
   registries discovered via `AddRegistryEvent` (mods can define **new registry
   kinds**).
-- `RegistryId` = `{modId, entryId}` — globally unique content IDs.
+- `RegistryId` = `{modId, entryId}` (grammar `[a-z][a-z0-9_-]*`, full id ≤ 255
+  chars — Tag-safe; verified mod-loader.md §4).
 - `MutableRegistry`/`Registry`/`RegistryEntry`/`RegistryDelegate`/`Registrar`:
-  typed registries; `Registrar` in a mod class declares entries lazily
+  typed registries; **lazy entry resolution** — `RegistryDelegate` proxies are
+  created on any `getEntry` (even missing ones) and throw with mod attribution
+  at *use* time; `Registrar` registers **lazy suppliers** per (registry, mod);
+  duplicate entry id → fatal `DuplicateRegistryIdException` (verified).
+  `Registrar` in a mod class declares entries lazily
   (`CONFIG_REGISTRAR.register("addition_mode", ...)` — see
   `legend.game.modding.coremod.CoreMod`, 378 lines of core config entries).
 - Boot order (`GameEngine.bootMods`): load mod classes → init event bus →
@@ -48,9 +57,14 @@ Paths relative to `~/Documents/GitHub/Severed-Chains`.
 
 ### 2.2 Event bus
 
-- `EventManager.postEvent(TypedEvent)` — synchronous, ordered listeners;
-  `CancelableEvent` for vetoable events; `EventListener` annotation; per-mod
-  error isolation (`onModError` → overlay notification, mod failure doesn't crash).
+> Event semantics now **verified from source** (mod-loader.md §3).
+
+- `EventManager.postEvent(TypedEvent)` — synchronous on the calling thread,
+  **exact-class dispatch** (an event subclass does not trigger base-class
+  listeners), **priority-ordered** (HIGHEST→LOWEST; ties = registration
+  order); `stopPropagation`/`cancel` semantics; **critical events re-throw
+  handler exceptions, non-critical errors go to `errorCallback(modId, e)`**
+  (→ `onModError` → overlay notification, mod failure doesn't crash).
 - In-repo event catalog (`legend.game.modding.events.*`) — representative set:
   - battle: `BattleStartedEvent`, `BattleEndedEvent`, `BattleEntityTurnEvent`,
     `MonsterStatsEvent`, `EnemyRewardsEvent`, `SpellStatsEvent`,
@@ -111,21 +125,51 @@ Paths relative to `~/Documents/GitHub/Severed-Chains`.
 
 ### 2.5 Story script patching
 
-- External `script-recompiler:0.7.11`: the game's binary story-script VM
-  (`OpType` opcodes, `ScriptState` execution) is disassembled to a "fate" text
-  language; `patches/` contains fate patches + CSV-driven meta patches
-  (`patches/meta/{params,enums,descriptions}.csv`, per-class stat CSVs);
-  `ScriptPatcher` applies them at unpack time with cache + backups.
-- `patches/scripts/DRGN0|DRGN1|DRGN21/...` — patched script trees.
-- This is the "fix original game bugs + tweak story" layer; native must
-  reimplement the fate pipeline (or an equivalent) for modding parity.
+> Pipeline now **verified from source** (`~/Documents/GitHub/Script-Recompiler`,
+> commit `3433e6f`) — see `docs/research/script-recompiler.md`. Summary:
+
+- External `script-recompiler:0.7.11` provides the **tooling half** of the
+  script VM: `Disassembler` (raw LE u32 word array → token tree with
+  register-type tracking), `Assembler` (token tree → words; op encoding
+  `opcode | paramCount<<8 | headerParam<<16`), `Translator`/`Tokenizer`
+  (canonical text form), `Patcher` (unified diff over stripped disassembly,
+  with `call <index>`↔`call <name>` normalization), and a **fate compiler**
+  (ANTLR grammar; high-level language → opcodes). The **runtime VM**
+  (`legend.game.scripting.ScriptManager` + `ScriptState`) lives in the
+  reference repo and reuses the same library at runtime (`GameEngine.SCRIPTS`).
+- **Patch application** (`legend/game/unpacker/scripts/ScriptPatcher`, run from
+  `GameEngine.start` right after unpack): a build-shipped `./patches/` dir
+  (built from the repo's `patches/` via Gradle) with:
+  - `scripts.csv` — patch list: `<diff|replacement>,<scriptPath>,<patchFile>,<desc>`;
+  - `scripts/*.diff` — unified diffs in canonical text form; `scripts/*.txt` —
+    full **fate-language replacement scripts** (notably
+    `player_combat_script.txt` — "Major rewrites to support modding" — and
+    `throw_item.txt`);
+  - `libs/` (includes), `meta/` (**local** meta CSVs — the game does NOT fetch
+    the remote scmeta; only the CLI does), `replacements/` (binary files, e.g.
+    `chester.tim`).
+  - Apply = back up unpatched original → disassemble(backup) → translate →
+    apply unified diff (or compile fate for replacements) → assemble → write;
+    **CRC32-of-patch-and-includes cache** (`files/patches/cache/`) with
+    **restore-on-deletion** (deleted patch → backup moved back).
+- `patches/scripts/DRGN0|DRGN1|DRGN21/...` — the per-script patch corpus
+  (hundreds of retail bug fixes: finisher crashes, dart checks, hardcoded
+  char counts...).
+- This is the "fix original game bugs + tweak story" layer; native ports the
+  fate pipeline into `psx::script` (dis/asm/text codec) + an in-repo unified-
+  diff component + a native fate compiler (open question Q-SCR-1) + the `fate`
+  CLI (roadmap M12).
 
 ### 2.6 i18n
 
-- `LangManager` (external): `lod.lang` / `lod_core.lang` resource bundles
-  (`src/main/resources/lod*/lang/en.lang`) + `lang/` directory overrides
-  (player + mod provided); `I18n.translate(key)`; mods contribute language
-  overrides.
+> Verified from source (mod-loader.md §5).
+
+- `LangManager` (external mod-loader): 4-level specificity
+  **OVERRIDE > LANGUAGE_COUNTRY > LANGUAGE > FALLBACK**; `.lang` files are
+  Java `.properties` (UTF-8) at `<modId>/lang/<xx>[_<XX>].lang` in each mod JAR
+  + a global user-override directory (loaded before mod boot); mod load order
+  = override order; key-as-fallback (missing key returns the key itself).
+  In-repo bundles: `src/main/resources/lod*/lang/en.lang`. `I18n.translate(key)`.
 
 ## 3. What a Java Mod Can Do Today (capability list)
 
@@ -157,7 +201,7 @@ non-Java native extensions.
 | `@EventListener` methods | Engine event bus with typed events; Luau `Engine.Event:Subscribe` + native plugin subscriptions |
 | Registries + `RegistryId` | Same model in C++ (`RegistryId{modId, entryId}`), exposed to Luau as tables and to native plugins as string IDs |
 | `LodMod` (retail content) | Built-in **`lod` game module** (C++ or Luau): registers all retail content — same structure, first-class mod API |
-| fate script patches | Reimplement fate compiler/patcher (or equivalent) in a CLI tool (Milestone 10+) |
+| fate script patches | `psx::script` dis/asm + in-repo unified-diff + native fate compiler; the fate CLI tool (roadmap M12) — verified pipeline in script-recompiler.md |
 | Keybinding config | Input actions + bindings storage (port `InputBindings` model) |
 | Save `modData` | Port Tag `ListTag` mod-data slot; versioned |
 | Asset replacements | Runtime override directories (priority chain) — replaces unpack-time replacements (more flexible) |
@@ -170,18 +214,24 @@ non-Java native extensions.
    (seam missing in Java — a native advantage for the Playable-Lloyd class of
    mods).
 3. Mod isolation: each mod's scripts run in a sandboxed Luau VM namespace;
-   native plugins are dlopen'd with a versioned C ABI and a documented failure
-   contract (a crashing plugin must not take down the game — use a fault
-   handler/process isolation strategy, documented in native-api.md).
+   native plugins are dlopen'd against the **C++23 plugin API** with a
+   documented failure contract (native-api.md — a crashing plugin takes down
+   the process; that is the documented limitation, with contract tests + fuzz
+   + an out-of-process mode as future work).
 
 ## 5. Open Questions
 
-- External mod-loader/modding-repo source is not in the reference repo
-  (jitpack `org.legendofdragoon` — separate GitHub org). For exact semantics
-  (classloader isolation, version-range matching, event ordering guarantees)
-  we should fetch those repos read-only. **Documented as a gap; not blocking
-  Phase 0** (the in-repo usage defines the contract we need).
+- ~~External mod-loader/modding-repo source not in the reference repo~~ —
+  **RESOLVED**: `Mod-Loader` (`c692134`) and `Script-Recompiler` (`3433e6f`)
+  repositories inspected read-only; semantics verified in
+  `docs/research/mod-loader.md` and `docs/research/script-recompiler.md`.
+- **Q-MOD-1..3 / Q-SCR-1..3**: see the respective research docs (mod error
+  callback behavior, i18n retail-vs-mod precedence, fate compiler approach,
+  multi-mod patch merging, entrypoint count source).
 - Mod license diversity: mods are third-party; the native mod package format
   must carry per-mod license metadata (don't assume AGPL).
 - Whether any released mods rely on Java-specific reflection/annotation tricks
   that have no native analogue (unknown — no mod source available locally).
+  Note: the *shared classloader* in Java means cross-mod class references are
+  technically possible today; the native design deliberately disallows them
+  (documented in the migration guide).
