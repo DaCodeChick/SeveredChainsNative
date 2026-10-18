@@ -2,10 +2,10 @@
 # Baseline: LLVM, with the project overrides below. Run: clang-format -i <file>
 # Do NOT mass-reformat files you haven't touched.
 BasedOnStyle: LLVM
-IndentWidth: 4
+IndentWidth: 2
 UseTab: Never
-TabWidth: 4
-ContinuationIndentWidth: 4
+TabWidth: 2
+ContinuationIndentWidth: 2
 ColumnLimit: 120
 AccessModifierOffset: -2
 AlignTrailingComments: true
@@ -63,8 +63,5 @@ SortUsingDeclarations: true
 SpaceAfterCStyleCast: false
 SpaceBeforeCpp11BracedList: false
 SpaceInEmptyParentheses: false
-# The project C++ standard is 23 (compiler-controlled, see build-system.md);
-# clang-format's Standard option only affects formatting heuristics — use the
-# highest value your clang-format build accepts (c++23 on newer toolchains).
-Standard: c++20
+Standard: c++23
 UseCRLF: false
