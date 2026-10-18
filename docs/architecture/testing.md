@@ -126,7 +126,7 @@ measurements; propose tools only when necessity is established.
 - **ABI stability tests** (the "native ABI compatibility" requirement,
   native-api.md §9.4): sample plugin compiled against SDK v1 (same
   toolchain) loads against engine vN and passes functional tests; interface
-  versioning (`api.table<T>()` — unknown id/version → nullopt, known →
+  versioning (`api.Table<T>()` — unknown id/version → nullopt, known →
   works); **frozen-layout probe** — `static_assert`s on size/offset of every
   frozen SDK type, compiled against the SDK *and* the previous engine's SDK
   headers (CI catches drift); string lifetime rules (engine doesn't hold
@@ -138,7 +138,7 @@ measurements; propose tools only when necessity is established.
   SDK headers with every CI compiler.
 - **Lifecycle tests**: discover (entry symbol lookup V-max..V1) → validate
   (bad manifest, missing dep, version mismatch, toolchain mismatch, cycle)
-  → load → init (`onLoad` success + failure injection) → ready → shutdown
+  → load → init (`OnLoad` success + failure injection) → ready → shutdown
   (handle-leak check) → unload; plugin crash isolation is *documented not
   testable in-process* (covered by the contract tests + the out-of-process
   future work).

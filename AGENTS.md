@@ -83,14 +83,30 @@ Severed Chains' enhancements and modding capabilities.
 | Element | Convention | Example |
 |---|---|---|
 | Namespaces | abbreviated flatcase | `sc::render`, `psx::tmd`, `game::combat` |
-| Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `decompressBpe`, `kMaxVoices`, `Status::Ok` |
+| Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `DecompressBPE`, `EntitySpawn`, `OnLoad`, `kMaxVoices`, `Status::Ok` |
 | Variables and parameters | camelCase | `simFrame`, `outCount` |
 | Private fields | camelCase with trailing underscore | `simFrame_`, `outCount_` |
 | Macros | UPPER_SNAKE_CASE | `SC_API`, `SC_NOEXCEPT_TARGETS` |
-| C-linkage discovery symbols (plugin entry only) | camelCase with `sc` prefix | `scPluginCreateV1` |
+| C-linkage discovery symbols (plugin entry only) | PascalCase with `Sc` prefix | `ScPluginCreateV1` |
 | Files | snake_case | `render_engine.cpp`, `render_engine.hpp` |
 
-- Third-party API naming is preserved (e.g. SDL_*, luau_*, Qt names stay as-is).
+- **Acronyms are fully capitalized inside PascalCase identifiers:**
+  `EngineAPI`, `GameplayAPI`, `XADecoder`, `GTEView`, `SFXVoice`, `DecompressBPE` —
+  never `EngineApi` / `XaDecoder` / `GteView` / `DecompressBpe`. The rule
+  applies to type names, function/method names, constants, and enum values.
+- The conventional suffix **`Id` / `Ids` is treated as a word** (matching
+  the reference project's `RegistryId`, `modId`, `entryId`) and is **not**
+  capitalized as an acronym.
+- Free functions and struct/class methods alike are PascalCase
+  (e.g. `DecompressBPE(bytes)`, `EngineAPI::QueryTable(...)`,
+  `Plugin::OnLoad(...)`); camelCase is reserved for variables/parameters/
+  private fields.
+- String *ids* and table id constants (e.g. `"sc.gameplay"`, registry ids,
+  event ids) are lowercase per the id grammar (mod-loader.md §4) — they are
+  identifiers in a string namespace, not C++ identifiers.
+- Third-party API naming is preserved (e.g. SDL_*, luau_*, Qt names stay
+  as-is; Java reference class names are cited verbatim in docs, e.g.
+  `GlApi`, `XaAdpcm`).
 - Enum values are PascalCase; `enum class` type names are PascalCase plural or
   singular by clarity (`EntryKind`, `Priority`).
 

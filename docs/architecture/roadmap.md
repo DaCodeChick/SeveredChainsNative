@@ -386,16 +386,16 @@ boundary, bytecode precompile cache, all namespaces implemented:
 Engine/Assets/Input/Render/Combat/Characters/Items/Saves/Audio/Script/Mod —
 full parity surface luau-api §3), **native plugin host** (the **C++23
 plugin API** live per native-api.md: `sc-sdk` (frozen interface headers +
-toolchain file), entry-symbol discovery (`scPluginCreateV<N>`), toolchain-
-parity check, capability interfaces `sc::GameplayApi/EventsApi/InputApi/
-RenderApi/AudioApi/AssetsApi/SaveApi/ScriptApi/CombatApi/LogApi`,
+toolchain file), entry-symbol discovery (`ScPluginCreateV<N>`), toolchain-
+parity check, capability interfaces `sc::GameplayAPI/EventsAPI/InputAPI/
+RenderAPI/AudioAPI/AssetsAPI/SaveAPI/ScriptAPI/CombatAPI/LogAPI`,
 dlopen/LoadLibrary, version negotiation, lifecycle state machine, failure
 UX parity, handle-leak
 checks, sample plugin built with the SDK toolchain file), **the "lod"
 content module** is now fully
 reachable by mods (content registered only through the APIs — audit that
 no retail path bypasses the registries), **script functions** registered
-by mods (Luau `Script.registerFunction` + native `sc::ScriptApi`), combat
+by mods (Luau `Script.registerFunction` + native `sc::ScriptAPI`), combat
 evaluator seam exercised (a Luau button-sequence addition works in a test
 battle — the Playable-Lloyd scenario), mod error isolation (compile/runtime
 errors → mod disabled, game continues, reported), save `modData` slots

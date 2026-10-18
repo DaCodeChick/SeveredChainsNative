@@ -68,7 +68,7 @@ rasterizer M7).
 
 `docs/architecture/native-api.md` fully rewritten per the owner decision.
 Summary:
-- **C-linkage discovery entry only** (`extern "C" scPluginCreateV<N>()` →
+- **C-linkage discovery entry only** (`extern "C" ScPluginCreateV<N>()` →
   `const sc::Plugin*`); all actual interfaces are C++ (abstract frozen
   classes, RAII, `std::string`, `std::expected`/`sc::Status`).
 - **Binary compatibility = frozen-layout discipline** (no added virtuals/
@@ -76,7 +76,7 @@ Summary:
   additive-only within a major) **+ toolchain parity** (plugin built with
   the same compiler family + standard library; **toolchain hash checked at
   load** — makes the `std::`/vtable assumptions checked, not hoped).
-- `EngineApi` root (frozen) + `api.table<T>()` typed capability discovery
+- `EngineAPI` root (frozen) + `api.Table<T>()` typed capability discovery
   (Gameplay/Events/Input/Render/Audio/Assets/Save/Script/Combat/Log).
 - No RTTI across public API boundaries (`-fno-rtti`/`/GR-` + CI probe);
   no exceptions (SDK toolchain file enforces); ownership = RAII
@@ -100,14 +100,16 @@ target) and the **naming conventions**:
 | Element | Convention |
 |---|---|
 | Namespaces | abbreviated flatcase (`sc::render`, `psx::tmd`, `game::combat`) |
-| Classes, structs, functions, methods, constants, enum values | PascalCase |
+| Classes, structs, functions, methods, constants, enum values | PascalCase (acronyms fully capitalized: `EngineAPI`, `DecompressBPE`) |
 | Variables and parameters | camelCase |
 | Private fields | camelCase + trailing underscore |
 | Macros | UPPER_SNAKE_CASE |
-| C-linkage discovery symbols | camelCase, `sc` prefix (`scPluginCreateV1`) |
+| C-linkage discovery symbols | PascalCase, `Sc` prefix (`ScPluginCreateV1`) |
 | Files | snake_case |
 
-Third-party API naming preserved.
+Third-party API naming preserved; `Id`/`Ids` treated as a word (not an
+acronym); string ids (registry/event/table ids) stay lowercase per the id
+grammar.
 
 ### 5. `.clang-format` created
 
@@ -181,7 +183,7 @@ supersede the specific items listed in §7.
 6. Two-pass translucency quirk preserved.
 7. Addition timing: per-hit window from `AdditionHitProperties10`,
    attack/counter action check per sim frame; **not mod-pluggable in
-   Java** → native `sc::CombatApi::AdditionInputEvaluator` seam (shared
+   Java** → native `sc::CombatAPI::AdditionInputEvaluator` seam (shared
    with Luau).
 8. Retail content is a mod (`LodMod`) → native game module registers
    content only through the mod API.

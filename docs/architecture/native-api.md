@@ -27,7 +27,7 @@ registry exposure; no `psx::` type exposure; not Qt's plugin system.
    *stricter and more auditable* than a hand-rolled C ABI.
 4. **One-way versioning.** Plugins declare a **minimum** engine API major
    version; the engine exposes versioned interface classes, discovered
-   through one stable query on `EngineApi` (§3). New engine versions add
+   through one stable query on `EngineAPI` (§3). New engine versions add
    interfaces; they never remove or change existing ones.
 5. **Explicit ownership (RAII).** Engine-created objects handed to plugins
    are borrowed (const or engine-owned `Shared<T>` — §9.3); plugin-created
@@ -59,7 +59,7 @@ A plugin exports exactly one C-linkage symbol per supported API major:
 namespace sc {
 
 struct PluginInfo;
-class EngineApi;
+class EngineAPI;
 
 // Implemented by the plugin (one instance per plugin, plugin-owned
 // lifetime — typically a static object). Returned pointer is valid until
@@ -67,24 +67,24 @@ class EngineApi;
 class Plugin {
 public:
   virtual ~Plugin() = default;
-  virtual const PluginInfo& info() const = 0;
+  virtual const PluginInfo& Info() const = 0;
   // Called after load, before READY. `api` outlives the plugin's READY
   // period. Returning a non-OK Status aborts activation (plugin reported
   // failed — parity with Java's failed-mod UX).
-  virtual Status onLoad(EngineApi& api) = 0;
-  virtual void onReady() = 0;
+  virtual Status OnLoad(EngineAPI& api) = 0;
+  virtual void OnReady() = 0;
   // Called before unload. The plugin must release every engine resource
   // it holds (the engine verifies — handle-leak check, §4).
-  virtual void onShutdown() = 0;
+  virtual void OnShutdown() = 0;
 };
 
 // The discovery symbol (C linkage, versioned by API major).
-extern "C" SC_API const Plugin* scPluginCreateV1();
+extern "C" SC_API const Plugin* ScPluginCreateV1();
 }  // namespace sc
 ```
 
-The engine looks up `scPluginCreateV<max>` down to `V1` (first hit wins);
-a plugin compiled against SDK v1 exports only `scPluginCreateV1` and loads
+The engine looks up `ScPluginCreateV<max>` down to `V1` (first hit wins);
+a plugin compiled against SDK v1 exports only `ScPluginCreateV1` and loads
 on any engine ≥ v1. (If a future v2 changes the `Plugin` vtable layout,
 both symbols can coexist; v1 symbols are never removed while supported.)
 
@@ -97,7 +97,7 @@ struct PluginInfo {
   std::string name;
   std::string author;
   std::string license;       // SPDX id (per-mod license metadata — not assumed AGPL)
-  uint32_t minApiVersion;    // engine API major the plugin was built against
+  uint32_t minAPIVersion;    // engine API major the plugin was built against
   std::vector<std::string> depends;  // mod/plugin ids (dependency closure checked by engine)
   uint64_t flags;            // SC_PLUGIN_FLAG_* (GAMEPLAY | ASSETS | COMBAT | ...)
   std::string toolchain;     // compiler+stdlib hash (checked at load — §9.2)
@@ -106,7 +106,7 @@ struct PluginInfo {
 
 ## 3. Engine Interface (engine → plugin)
 
-`EngineApi` is the **frozen root** (v1): after v1 it never gains virtuals
+`EngineAPI` is the **frozen root** (v1): after v1 it never gains virtuals
 or members. Capability discovery is one stable method; each capability is
 a separate **frozen interface class** with typed constants:
 
@@ -114,40 +114,40 @@ a separate **frozen interface class** with typed constants:
 // SDK: sc/engine_api.hpp
 namespace sc {
 
-class EngineApi {
+class EngineAPI {
 public:
-  virtual ~EngineApi() = default;
-  virtual const EngineVersion& version() const = 0;      // "0.1.0+commit", channel
+  virtual ~EngineAPI() = default;
+  virtual const EngineVersion& Version() const = 0;      // "0.1.0+commit", channel
   // Stable discovery entry. Returns nullptr if the running engine does
   // not provide `id` at `version` (the plugin degrades gracefully,
   // logged). `id` values are the SC_API_*_ID string constants.
-  virtual void* queryTable(const char* id, uint32_t version) = 0;
+  virtual void* QueryTable(const char* id, uint32_t version) = 0;
 
   template<typename T>
-  std::optional<T*> table(uint32_t version = T::kVersion) const {
-    return static_cast<T*>(queryTable(T::kId, version));
+  std::optional<T*> Table(uint32_t version = T::kVersion) const {
+    return static_cast<T*>(QueryTable(T::kId, version));
   }
   // Engine-side diagnostics available to the plugin.
-  virtual void log(Verbosity level, const std::string& tag,
+  virtual void Log(Verbosity level, const std::string& tag,
                    const std::string& message) = 0;
 };
 
 // Example capability interface (frozen at v1):
-class GameplayApi {
+class GameplayAPI {
 public:
   static constexpr const char* kId = "sc.gameplay";
   static constexpr uint32_t kVersion = 1;
-  virtual ~GameplayApi() = default;
-  virtual uint32_t entityCount(SceneHandle scene) const = 0;
+  virtual ~GameplayAPI() = default;
+  virtual uint32_t EntityCount(SceneHandle scene) const = 0;
   virtual std::expected<uint32_t, Status>
-      entitySpawn(SceneHandle scene, const SpawnDesc& desc) = 0;
-  virtual void entityDestroy(SceneHandle scene, EntityHandle e) = 0;
+      EntitySpawn(SceneHandle scene, const SpawnDesc& desc) = 0;
+  virtual void EntityDestroy(SceneHandle scene, EntityHandle e) = 0;
   virtual std::expected<Transform, Status>
-      entityTransformGet(SceneHandle scene, EntityHandle e) const = 0;
-  virtual void entityTransformSet(SceneHandle scene, EntityHandle e,
+      EntityTransformGet(SceneHandle scene, EntityHandle e) const = 0;
+  virtual void EntityTransformSet(SceneHandle scene, EntityHandle e,
                                   const Transform& t) = 0;
-  virtual GameState gameState() const = 0;              // enum + chapter...
-  virtual Timestamp gameClock() const = 0;
+  virtual GameState GameState() const = 0;               // enum + chapter...
+  virtual Timestamp GameClock() const = 0;
 };
 }  // namespace sc
 ```
@@ -172,46 +172,46 @@ using RegistryId = std::string;            // "modid:entryid" (grammar per mod-l
 - `std::string_view` / `std::span` may be used **only as non-owning
   inputs, valid for the duration of the call** (documented per method).
 - The EnTT registry is never exposed (entities are `EntityHandle`s;
-  components are queried via typed methods on `GameplayApi` /
-  `CombatApi`). `psx::` types are never exposed (engine services hand out
+  components are queried via typed methods on `GameplayAPI` /
+  `CombatAPI`). `psx::` types are never exposed (engine services hand out
   decoded *results* as SDK value types).
 - Every interface class and value struct is **layout-frozen** once shipped
   in a major version (§9.2).
 
-**Registry access** (`RegistryApi`, mirrors mod-loader.md semantics):
+**Registry access** (`RegistryAPI`, mirrors mod-loader.md semantics):
 
 ```cpp
-class RegistryApi {
+class RegistryAPI {
 public:
   static constexpr const char* kId = "sc.registry";
   static constexpr uint32_t kVersion = 1;
-  virtual ~RegistryApi() = default;
+  virtual ~RegistryAPI() = default;
   // Lazy resolution: missing entry → Err(Status::ModNotLoaded) at USE
   // time (parity with Java RegistryDelegate behavior), attributed to the
   // owning mod id.
-  virtual std::expected<EntryRef, Status> entry(const RegistryId& id,
+  virtual std::expected<EntryRef, Status> Entry(const RegistryId& id,
                                                 EntryKind kind) const = 0;
-  virtual std::vector<RegistryId> entryList(EntryKind kind) const = 0;
-  virtual std::expected<bool, Status>   configBool(const RegistryId& id) const = 0;
-  virtual std::expected<int32_t, Status> configInt(const RegistryId& id) const = 0;
-  virtual std::expected<float, Status>   configFloat(const RegistryId& id) const = 0;
-  virtual std::expected<std::string, Status> configString(const RegistryId& id) const = 0;
+  virtual std::vector<RegistryId> EntryList(EntryKind kind) const = 0;
+  virtual std::expected<bool, Status>    ConfigBool(const RegistryId& id) const = 0;
+  virtual std::expected<int32_t, Status> ConfigInt(const RegistryId& id) const = 0;
+  virtual std::expected<float, Status>   ConfigFloat(const RegistryId& id) const = 0;
+  virtual std::expected<std::string, Status> ConfigString(const RegistryId& id) const = 0;
 };
 ```
 
 ## 4. Lifecycle
 
 ```
-discover (mod dir scan: <mod>/native/*.so|dll|dylib + `scPluginCreateV*` presence)
+discover (mod dir scan: <mod>/native/*.so|dll|dylib + `ScPluginCreateV*` presence)
   → validate (PluginInfo schema, id uniqueness, dependency closure,
-              minApiVersion <= engine major, toolchain hash match §9.2)
+              minAPIVersion <= engine major, toolchain hash match §9.2)
   → load     (dlopen RTLD_LAZY / LoadLibrary / dlopen-macos; symbol lookup
-              scPluginCreateV<max..1>; capture loader error)
-  → init     (info() + onLoad(api): plugin fetches tables via api.table<T>(),
+              ScPluginCreateV<max..1>; capture loader error)
+  → init     (Info() + OnLoad(api): plugin fetches tables via api.Table<T>(),
               registers callbacks/entries; any Err → plugin marked failed,
               unloaded, reported in mod list — parity with Java failed-mod UX)
-  → ready    (onReady(); registered events fire; script functions available)
-  → shutdown (onShutdown(); engine verifies the plugin holds no engine
+  → ready    (OnReady(); registered events fire; script functions available)
+  → shutdown (OnShutdown(); engine verifies the plugin holds no engine
               resources — handle-leak check, logged; engine then unloads)
   → unload   (dlclose; Plugin* and all engine-side plugin state destroyed)
 ```
@@ -235,16 +235,16 @@ discover (mod dir scan: <mod>/native/*.so|dll|dylib + `scPluginCreateV*` presenc
 
 | Interface (`kId`) | Capabilities |
 |---|---|
-| `sc.gameplay` (`GameplayApi`) | entity queries/spawn/destroy, transforms, game state/clock, flags |
-| `sc.events` (`EventsApi`) | subscribe/unsubscribe (§6), post custom events (visible to Luau + native listeners) |
-| `sc.input` (`InputApi`) | read action state (pressed/held/repeat/axis), define new actions, bind queries |
-| `sc.render` (`RenderApi`) | custom draw callbacks on the render event (scoped `RenderScope`: pipelines created via engine builder, textures, vertex/index buffers), post-shader uniform hooks (e.g. `turn_order_bounds`-style) |
-| `sc.audio` (`AudioApi`) | register music (sequence file refs), play SFX from soundbanks, volume control, music event queries; `[audio-thread]`-marked callbacks documented |
-| `sc.assets` (`AssetsApi`) | register path-override roots (asset replacement), query/decode assets via engine decoders (TMD/TIM/ANM... → SDK value types), upload decoded data to GPU |
-| `sc.save` (`SaveApi`) | read/write the plugin's `modData` slot (scoped by plugin id; serialized as Tag entries — byte-compat with the Java `modData` slot layout for the same id), save-validation hooks |
-| `sc.script` (`ScriptApi`) | register story-script functions (op → callback with typed param in/out), query script flag state (parity with `ReadGlobalFlagsEvent` + `@ScriptDescription`) |
-| `sc.combat` (`CombatApi`) | battle lifecycle queries, **addition input evaluator registration** (§7), hit result overrides |
-| `sc.log` (`LogApi`) | leveled tagged logging (also available on `EngineApi::log`) |
+| `sc.gameplay` (`GameplayAPI`) | entity queries/spawn/destroy, transforms, game state/clock, flags |
+| `sc.events` (`EventsAPI`) | subscribe/unsubscribe (§6), post custom events (visible to Luau + native listeners) |
+| `sc.input` (`InputAPI`) | read action state (pressed/held/repeat/axis), define new actions, bind queries |
+| `sc.render` (`RenderAPI`) | custom draw callbacks on the render event (scoped `RenderScope`: pipelines created via engine builder, textures, vertex/index buffers), post-shader uniform hooks (e.g. `turn_order_bounds`-style) |
+| `sc.audio` (`AudioAPI`) | register music (sequence file refs), play SFX from soundbanks, volume control, music event queries; `[audio-thread]`-marked callbacks documented |
+| `sc.assets` (`AssetsAPI`) | register path-override roots (asset replacement), query/decode assets via engine decoders (TMD/TIM/ANM... → SDK value types), upload decoded data to GPU |
+| `sc.save` (`SaveAPI`) | read/write the plugin's `modData` slot (scoped by plugin id; serialized as Tag entries — byte-compat with the Java `modData` slot layout for the same id), save-validation hooks |
+| `sc.script` (`ScriptAPI`) | register story-script functions (op → callback with typed param in/out), query script flag state (parity with `ReadGlobalFlagsEvent` + `@ScriptDescription`) |
+| `sc.combat` (`CombatAPI`) | battle lifecycle queries, **addition input evaluator registration** (§7), hit result overrides |
+| `sc.log` (`LogAPI`) | leveled tagged logging (also available on `EngineAPI::Log`) |
 
 ## 6. Events (C++)
 
@@ -258,25 +258,25 @@ struct Event {
   uint64_t seq;                       // monotonic
   // Typed payload access (per-event accessors documented 1:1 with the
   // Java event catalog — the catalog table ships in the API reference):
-  // e.g. template <> BattleTurnedEvent payload of event "battle.turned":
-  //   auto turn = e.payload<BattleTurnedEvent>();
-  std::expected<void, Status> cancel() const;  // CancelableEvent parity:
-};                                       // stopPropagation/cancel semantics
+  // e.g. BattleTurnedEvent payload of event "battle.turned":
+  //   auto turn = e.Payload<BattleTurnedEvent>();
+  std::expected<void, Status> Cancel() const;   // CancelableEvent parity:
+};                                        // stopPropagation/cancel semantics
 using EventCallback = std::function<void(const Event&)>;
 
-class EventsApi {
+class EventsAPI {
 public:
   static constexpr const char* kId = "sc.events";
   static constexpr uint32_t kVersion = 1;
-  virtual ~EventsApi() = default;
+  virtual ~EventsAPI() = default;
   // `handler` may be a lambda/std::function capturing plugin state; the
   // engine copies it (toolchain rule applies). Priority semantics mirror
   // mod-loader.md §3 (higher first; same priority = registration order).
   virtual std::expected<uint32_t, Status>
-      subscribe(const EventId& id, EventCallback handler,
+      Subscribe(const EventId& id, EventCallback handler,
                 Priority priority = Priority::Normal) = 0;
-  virtual void unsubscribe(uint32_t subId) = 0;
-  virtual std::expected<void, Status> post(const EventId& id,
+  virtual void Unsubscribe(uint32_t subId) = 0;
+  virtual std::expected<void, Status> Post(const EventId& id,
                                            const EventPayload& payload) = 0;
 };
 }  // namespace sc
@@ -284,7 +284,7 @@ public:
 
 - Synchronous dispatch on the calling thread (parity — mod-loader.md §3);
   handler exceptions are impossible (no exceptions); a handler signaling
-  failure returns via the event's cancel path or `EngineApi::log`.
+  failure returns via the event's cancel path or `EngineAPI::Log`.
 - Event ids mirror the Java catalog 1:1 (`render`, `engine.state.changed`,
   `battle.started`, `battle.ended`, `battle.entity.turn`, `monster.stats`,
   `enemy.rewards`, `input.pressed`, `input.released`, `game.loaded`,
@@ -306,30 +306,30 @@ struct AdditionHitState {
   uint32_t lowerBound, upperBound;   // from AdditionHitProperties10 (× timing-window config)
   bool isCounter;
   // action query helpers (read the 5-battle-action state for `frame`):
-  std::expected<bool, Status> actionHeld(BattleAction action) const;
+  std::expected<bool, Status> ActionHeld(BattleAction action) const;
 };
 enum class AdditionHitResult { Pending, Success, FailWrong, FailEarly, FailLate };
 
 class AdditionInputEvaluator {
 public:
   virtual ~AdditionInputEvaluator() = default;
-  virtual const std::string& id() const = 0;
+  virtual const std::string& Id() const = 0;
   // Called per sim frame during an addition hit window.
-  virtual AdditionHitResult evaluate(const AdditionHitState& state) = 0;
+  virtual AdditionHitResult Evaluate(const AdditionHitState& state) = 0;
   // Optional: custom overlay draw (default = the retail timing square).
-  virtual void drawOverlay(const AdditionHitState& state, RenderScope& rs) {}
+  virtual void DrawOverlay(const AdditionHitState& state, RenderScope& rs) {}
 };
 
-class CombatApi {
+class CombatAPI {
 public:
   static constexpr const char* kId = "sc.combat";
   static constexpr uint32_t kVersion = 1;
-  virtual ~CombatApi() = default;
+  virtual ~CombatAPI() = default;
   // Ownership: the engine takes the unique_ptr (transfer point, §1.5).
   virtual std::expected<void, Status>
-      registerAdditionInputEvaluator(std::unique_ptr<AdditionInputEvaluator> ev) = 0;
+      RegisterAdditionInputEvaluator(std::unique_ptr<AdditionInputEvaluator> ev) = 0;
   virtual std::expected<void, Status>
-      setAdditionEvaluator(const RegistryId& additionId,
+      SetAdditionEvaluator(const RegistryId& additionId,
                            const std::string& evaluatorId) = 0;
   // battle lifecycle queries...
 };
@@ -341,7 +341,7 @@ public:
   Java.
 - A mod (Luau *or* native) registers an alternative (e.g. face-button
   sequences) and points specific additions at it. The combat state machine
-  consumes `evaluate()` results only — no core rewrite (requirement §11).
+  consumes `Evaluate()` results only — no core rewrite (requirement §11).
 - Luau parity: `Combat.Addition:setInputEvaluator(...)` (luau-api.md) is an
   adapter over this same interface.
 
@@ -365,10 +365,10 @@ public:
 ## 9. ABI Stability Policy
 
 ### 9.1 Versioning
-- **API major** = the `Plugin` entry vtable + `EngineApi` root layout.
-  Symbol `scPluginCreateV<MAJOR>`; engine tries newest→oldest.
+- **API major** = the `Plugin` entry vtable + `EngineAPI` root layout.
+  Symbol `ScPluginCreateV<MAJOR>`; engine tries newest→oldest.
 - **Interface version** (`T::kVersion`) = per-capability class layout.
-  `queryTable(id, version)` returns the highest version ≤ requested that
+  `QueryTable(id, version)` returns the highest version ≤ requested that
   the engine provides, or nullptr.
 - Within a major: **frozen layout** — no added virtuals, data members, or
   changed enum values on shipped classes/structs; additive changes only
@@ -394,9 +394,9 @@ public:
 - Borrowed: `const T&` / `T&` / `Shared<T>` (engine-defined intrusive
   refcount — stable layout, no stdlib dependence).
 - Transfer: `std::unique_ptr<T>` at explicitly documented points (e.g.
-  `registerAdditionInputEvaluator`, resource creation APIs).
+  `RegisterAdditionInputEvaluator`, resource creation APIs).
 - Plugin-owned: everything else a plugin creates; released in
-  `onShutdown()`; verified by the handle-leak check.
+  `OnShutdown()`; verified by the handle-leak check.
 
 ### 9.4 ABI tests (testing.md §2.9, updated)
 - **Oldest-plugin matrix**: a sample plugin compiled against SDK v1
