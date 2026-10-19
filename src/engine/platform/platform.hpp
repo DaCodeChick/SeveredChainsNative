@@ -2,23 +2,21 @@
 
 #include <string>
 
-namespace sc::platform
+namespace lod
 {
 /// SDL3 subsystem lifecycle: video + gamepad (audio lands in M5).
 ///
-/// Port of the reference `SdlPlatformManager` init/shutdown semantics (M1
-/// foundation subset — the full input/platform parity pass is a later M1
-/// increment). Owns no windows; the `Window` class does.
-class SdlPlatform
+/// M1 foundation subset — the full input/platform parity pass is a later M1
+/// increment. Owns no windows; the `Window` class does.
+class SDLPlatform
 {
 public:
-  SdlPlatform() = default;
-  ~SdlPlatform();
-  SdlPlatform(const SdlPlatform&) = delete;
-  SdlPlatform& operator=(const SdlPlatform&) = delete;
+  SDLPlatform() = default;
+  ~SDLPlatform();
+  SDLPlatform(const SDLPlatform&) = delete;
+  SDLPlatform& operator=(const SDLPlatform&) = delete;
 
-  /// Initializes SDL3 (video + gamepad) with the project hints
-  /// (parity: `SdlPlatformManager.java:149-150`).
+  /// Initializes SDL3 (video + gamepad) with the project hints.
   ///
   /// @return true on success; the failure reason is logged.
   [[nodiscard]] bool Init();
@@ -36,10 +34,10 @@ public:
   [[nodiscard]] std::string LastError() const;
 
   /// The loaded SDL3 version (e.g. "3.4.18").
-  [[nodiscard]] static std::string SdlVersionString();
+  [[nodiscard]] static std::string VersionString();
 
 private:
   bool initialized_ = false;
 };
 
-} // namespace sc::platform
+} // namespace lod

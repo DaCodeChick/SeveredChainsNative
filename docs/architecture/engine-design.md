@@ -9,7 +9,7 @@ behavior while dropping the Java/ROM-mirroring organization.
 ```
 CMakeLists.txt
 psx/                         # INDEPENDENT reusable PS1 library — target `psx`,
-                             #   namespace psx::, PREFIX-FREE (no Sc/SC/sc), zero
+                             #   namespace psx::, PREFIX-FREE (no Sc/SC/sc, no LoD/LOD/lod), zero
                              #   deps, compiles standalone;
                              #   self-contained subproject, may be extracted to its
                              #   own repo (build form: CMake BUILD_SHARED_LIBS). gte, gpu (+ software reference
@@ -19,9 +19,9 @@ psx/                         # INDEPENDENT reusable PS1 library — target `psx`
 src/
   engine/                    # reusable, LoD-agnostic (the "engine")
     app/                     # App, MainLoop, Scheduler (Action equivalent), diagnostics
-    platform/                # SdlPlatform, Window, Input (actions/bindings/devices),
+    platform/                # SDLPlatform, Window, Input (actions/bindings/devices),
                              #   Displays, Rumble, clipboard, URLs
-    gpu/                     # SdlGpuDevice wrapper, frame graph (command buffers,
+    gpu/                     # SDLGpuDevice wrapper, frame graph (command buffers,
                              #   render passes, fences/cycling), pipeline cache,
                              #   resource lifetimes (RAII over SDL_GPU handles)
     render/                  # Renderer (frame structure), Batches, ModelPool,
@@ -62,7 +62,7 @@ src/
     title/ submap/ wmap/ battle/ inventory/ text/ credits/ fmv/
     (each state: state object + tick/postScriptTick/overlayTick + save data)
   libs/
-    dabas/                   # scdabas — Mogul Dabas handheld console + minigame
+    dabas/                   # loddabas — Mogul Dabas handheld console + minigame
                              #   logic port (no SDL/Qt; host-interface driven)
   tools/
     qt/                      # Qt 6 desktop: launcher, settings, mod manager,
@@ -210,7 +210,7 @@ EnTT is used for **scene/entity management**, not engine services:
   collision → camera → queue submission). EnTT's deferred destroy matches our
   deferred destruction.
 - **EnTT stays out of the public plugin API** (requirement): plugins address
-  entities via `sc::EntityHandle`s + typed capability methods through the
+  entities via `lod::EntityHandle`s + typed capability methods through the
   C++23 interface (see native-api.md).
 - Not forced into ECS: engine services (renderer, audio, assets, saves), the
   battle state machine (explicit state objects with EnTT as their entity store),

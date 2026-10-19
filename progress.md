@@ -135,6 +135,43 @@ prescriptive guidelines. Delivered:
 4. Golden-fixture generation with the user (Java reference + discs) for
    M5+.
 
+## Naming-convention correction pass (2026-10-19, owner-directed)
+
+Owner review of the M1 code produced four corrections, all applied and
+verified (clean rebuild, 16/16 tests, doxygen, format, flag audit):
+
+1. **`Sc`/`SC`/`sc` → `LoD`/`LOD`/`lod` in code.** Severed Chains is the
+   *project* name (product branding: executable, window title, version
+   string); the code implements *the game*, so identifiers carry the LoD
+   prefix. Applied: namespace `lod::` (engine), `LOD_*` macros and CMake
+   options, `lod_*` CMake targets/vars, `lod_test.*` framework files,
+   `LodToolchain/LodDeps/LodDocs.cmake`, targets `lodengine`, `lod-tests`,
+   `lod-test-framework`, `lod-api-docs`; docs + AGENTS.md + cpp.md synced
+   (incl. `LoDPluginCreateV1`, `lodgame`, `loddabas`, `lod-sdk`,
+   `lod_qt_shim`, `lod_toolchain.cmake`, string ids `lod.gameplay` etc.).
+   `psx` stays prefix-free and the rule was strengthened to "no Sc/SC/sc,
+   no LoD/LOD/lod". Audit: zero Sc/SC/sc tokens remain in code.
+2. **No Java-implementation mentions in code comments.** Removed all
+   `.java`/`log4j`/"reference" citations from code comments (SdlWindow,
+   SdlPlatformManager, Config, InputBindings, Version.isRelease, Action);
+   comments now state behavior directly. cpp.md §7 now prohibits Java
+   citations in code comments (they belong in `docs/` per research
+   methodology).
+3. **cpp.md rules updated to the conventions** (owner: "apply our naming
+   conventions to the cpp.md rules"): library namespaces only, acronym
+   capitalization examples, member names must not repeat the class name,
+   prefix-identity rule (LoD = game, Severed Chains = project).
+4. **Type/member naming corrected**: `SdlPlatform` → `SDLPlatform`,
+   `SdlVersionString` → `VersionString`. **Namespaces now belong to
+   libraries only**: `sc::util`/`sc::platform`/`sc::app` merged into the
+   single engine namespace `lod` (the `App` class has no namespace of its
+   own); the test framework keeps `lod::test` as the separate test
+   library's namespace.
+
+M1 work was committed by the owner as `aa253f2` ("Establish the C++23
+application foundation") before this pass; the renaming changes are
+uncommitted working-tree modifications.
+
 ## Phase 0 Follow-Up (prior session)
 
 ### 1. Three additional repositories researched (all read-only, all AGPL-3.0)

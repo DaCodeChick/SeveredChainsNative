@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace sc::test
+namespace lod::test
 {
 /// A registered test case.
 struct Case
@@ -44,7 +44,7 @@ struct Context
   std::string testName; ///< Currently running test name.
   int checks = 0;       ///< Total checks executed so far.
   int failures = 0;     ///< Failed checks so far.
-  std::string section;  ///< Current SC_SECTION label (or "").
+  std::string section;  ///< Current LOD_SECTION label (or "").
 };
 
 /// The current test context (single-threaded runner).
@@ -66,7 +66,7 @@ Context& Current();
 /// @return 0 all passed, 1 at least one failed, 2 no case matched.
 int RunAll(int argc, char** argv);
 
-} // namespace sc::test
+} // namespace lod::test
 
 namespace
 {
@@ -76,12 +76,12 @@ struct TestRegistration
 {
   TestRegistration(std::string name, std::string tags, bool (*fn)())
   {
-    sc::test::Registry::Instance().Add(std::move(name), std::move(tags), fn);
+    lod::test::Registry::Instance().Add(std::move(name), std::move(tags), fn);
   }
 };
 } // namespace
 
-#define SC_TEST(name, tags)                                                                                            \
+#define LOD_TEST(name, tags)                                                                                           \
   static bool Test_##name();                                                                                           \
   namespace                                                                                                            \
   {                                                                                                                    \
@@ -89,7 +89,7 @@ struct TestRegistration
   }                                                                                                                    \
   static bool Test_##name()
 
-#define SC_CHECK(cond) (void)sc::test::Check(static_cast<bool>(cond), #cond, __FILE__, __LINE__)
-#define SC_REQUIRE(cond)                                                                                               \
-  if (!sc::test::Check(static_cast<bool>(cond), #cond, __FILE__, __LINE__))                                            \
+#define LOD_CHECK(cond) (void)lod::test::Check(static_cast<bool>(cond), #cond, __FILE__, __LINE__)
+#define LOD_REQUIRE(cond)                                                                                              \
+  if (!lod::test::Check(static_cast<bool>(cond), #cond, __FILE__, __LINE__))                                           \
   return false

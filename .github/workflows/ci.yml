@@ -7,7 +7,7 @@ on:
 
 # build-system.md §8: 3-platform matrix (Windows MSVC, Ubuntu GCC,
 # macOS arm64 Clang). M1 jobs: configure (runs the exception/RTTI compiler
-# policy probes) -> build (all targets) -> unit tests (sc-tests +
+# policy probes) -> build (all targets) -> unit tests (lod-tests +
 # psx-tests). SDK probes / golden compiles / headless GPU smoke land in
 # later milestones.
 jobs:

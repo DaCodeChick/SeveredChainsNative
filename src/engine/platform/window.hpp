@@ -5,24 +5,22 @@
 #include <cstdint>
 #include <string>
 
-namespace sc::platform
+namespace lod
 {
-/// Minimum window size (parity: `SdlWindow.java:137`).
+/// Minimum window size (320x240).
 inline constexpr int32_t kWindowMinWidth = 320;
 inline constexpr int32_t kWindowMinHeight = 240;
 
-/// Window creation settings (defaults = the reference `Config` defaults,
-/// `Config.java:35-36`).
+/// Window creation settings (default client size: 960x720).
 struct WindowConfig
 {
   std::string title = "Severed Chains"; ///< Window title.
-  int32_t width = 960;                  ///< Initial client width in pixels (reference default).
-  int32_t height = 720;                 ///< Initial client height in pixels (reference default).
+  int32_t width = 960;                  ///< Initial client width in pixels.
+  int32_t height = 720;                 ///< Initial client height in pixels.
 };
 
-/// SDL3 window with the reference `SdlWindow` semantics (M1 foundation
-/// subset: create/show, minimum size, resize, per-monitor fullscreen
-/// toggle).
+/// SDL3 window (M1 foundation subset: create/show, minimum size, resize,
+/// per-monitor fullscreen toggle).
 ///
 /// Owns its `SDL_Window` (C-interop owned resource — guidelines §5); the
 /// raw handle is exposed read-only via `Handle()` as the escape hatch for
@@ -69,8 +67,8 @@ public:
 
   /// Toggles per-monitor fullscreen (SDL3 unified fullscreen).
   ///
-  /// The Windows borderless +1px hack (reference parity) lands with the
-  /// window-parity increment — it requires a Windows machine to verify.
+  /// The Windows borderless-fullscreen +1px correction lands with the
+  /// window-parity increment (requires a Windows machine to verify).
   void ToggleFullscreen();
 
   /// The raw SDL window (C-interop escape hatch for the M2 GPU layer).
@@ -82,4 +80,4 @@ private:
   SDL_Window* window_ = nullptr; // C-interop owned resource
 };
 
-} // namespace sc::platform
+} // namespace lod

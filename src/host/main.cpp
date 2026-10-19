@@ -1,5 +1,5 @@
 // severed-chains — thin host (build-system.md §1): argument parsing + App +
-// exit code. All behavior lives in scengine.
+// exit code. All behavior lives in lodengine.
 #include "app/app.hpp"
 #include "util/log.hpp"
 #include "util/status.hpp"
@@ -25,35 +25,35 @@ void PrintUsage(std::string_view programName)
   std::println("  --help          show this help");
 }
 
-sc::util::LogLevel ParseLogLevel(std::string_view text)
+lod::LogLevel ParseLogLevel(std::string_view text)
 {
   if (text == "trace")
   {
-    return sc::util::LogLevel::Trace;
+    return lod::LogLevel::Trace;
   }
   if (text == "debug")
   {
-    return sc::util::LogLevel::Debug;
+    return lod::LogLevel::Debug;
   }
   if (text == "info")
   {
-    return sc::util::LogLevel::Info;
+    return lod::LogLevel::Info;
   }
   if (text == "warning")
   {
-    return sc::util::LogLevel::Warning;
+    return lod::LogLevel::Warning;
   }
   if (text == "error")
   {
-    return sc::util::LogLevel::Error;
+    return lod::LogLevel::Error;
   }
-  return sc::util::LogLevel::Info;
+  return lod::LogLevel::Info;
 }
 } // namespace
 
 int main(int argc, char** argv)
 {
-  sc::app::AppOptions options;
+  lod::AppOptions options;
   bool headless = false;
 
   for (int i = 1; i < argc; ++i)
@@ -66,7 +66,7 @@ int main(int argc, char** argv)
     }
     if (arg == "--version")
     {
-      const auto& version = sc::util::GetVersionInfo();
+      const auto& version = lod::GetVersionInfo();
       std::println("Severed Chains {} (commit {}, built {}, channel {})", version.version, version.commit,
                    version.buildTimestamp, version.channel);
       return EXIT_SUCCESS;
@@ -113,7 +113,7 @@ int main(int argc, char** argv)
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
   }
 
-  sc::app::App app;
-  const sc::Status status = app.Run(options);
-  return status == sc::Status::Ok ? EXIT_SUCCESS : EXIT_FAILURE;
+  lod::App app;
+  const lod::Status status = app.Run(options);
+  return status == lod::Status::Ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

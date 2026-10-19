@@ -8,7 +8,7 @@ registry exposure; no `psx::` type exposure; not Qt's plugin system.
 
 ## 1. Core Principles
 
-1. **The engine exports; plugins consume.** `scengine` builds as a shared
+1. **The engine exports; plugins consume.** `lodengine` builds as a shared
    library; the player-facing executable is a thin host; standalone tools
    (Qt debugger, fate CLI) link the same engine. *(Unchanged from Phase 0.)*
 2. **C++23 at the boundary.** Plugins are C++23 shared libraries built
@@ -34,8 +34,8 @@ registry exposure; no `psx::` type exposure; not Qt's plugin system.
    objects handed to the engine transfer ownership via
    `std::unique_ptr` at the documented transfer points only. No raw
    delete across the boundary. Handle-leak verification at unload (§4).
-6. **Errors, not exceptions.** `sc::Status` (enum class) or
-   `std::expected<T, sc::Status>` for every fallible operation; no
+6. **Errors, not exceptions.** `lod::Status` (enum class) or
+   `std::expected<T, lod::Status>` for every fallible operation; no
    `throw`/`try`/`catch` anywhere (compile-enforced on both sides; the SDK
    toolchain file sets `-fno-exceptions`/`/EHs-c-` — error-handling.md).
    RTTI is likewise disabled (`-fno-rtti` / `/GR-`) — the API never uses
@@ -55,8 +55,8 @@ registry exposure; no `psx::` type exposure; not Qt's plugin system.
 A plugin exports exactly one C-linkage symbol per supported API major:
 
 ```cpp
-// SDK: sc/plugin.hpp
-namespace sc {
+// SDK: lod/plugin.hpp
+namespace lod {
 
 struct PluginInfo;
 class EngineAPI;
@@ -79,12 +79,12 @@ public:
 };
 
 // The discovery symbol (C linkage, versioned by API major).
-extern "C" SC_API const Plugin* ScPluginCreateV1();
-}  // namespace sc
+extern "C" LOD_API const Plugin* LoDPluginCreateV1();
+}  // namespace lod
 ```
 
-The engine looks up `ScPluginCreateV<max>` down to `V1` (first hit wins);
-a plugin compiled against SDK v1 exports only `ScPluginCreateV1` and loads
+The engine looks up `LoDPluginCreateV<max>` down to `V1` (first hit wins);
+a plugin compiled against SDK v1 exports only `LoDPluginCreateV1` and loads
 on any engine ≥ v1. (If a future v2 changes the `Plugin` vtable layout,
 both symbols can coexist; v1 symbols are never removed while supported.)
 
@@ -99,7 +99,7 @@ struct PluginInfo {
   std::string license;       // SPDX id (per-mod license metadata — not assumed AGPL)
   uint32_t minAPIVersion;    // engine API major the plugin was built against
   std::vector<std::string> depends;  // mod/plugin ids (dependency closure checked by engine)
-  uint64_t flags;            // SC_PLUGIN_FLAG_* (GAMEPLAY | ASSETS | COMBAT | ...)
+  uint64_t flags;            // LOD_PLUGIN_FLAG_* (GAMEPLAY | ASSETS | COMBAT | ...)
   std::string toolchain;     // compiler+stdlib hash (checked at load — §9.2)
 };
 ```
@@ -111,8 +111,8 @@ or members. Capability discovery is one stable method; each capability is
 a separate **frozen interface class** with typed constants:
 
 ```cpp
-// SDK: sc/engine_api.hpp
-namespace sc {
+// SDK: lod/engine_api.hpp
+namespace lod {
 
 class EngineAPI {
 public:
@@ -120,7 +120,7 @@ public:
   virtual const EngineVersion& Version() const = 0;      // "0.1.0+commit", channel
   // Stable discovery entry. Returns nullptr if the running engine does
   // not provide `id` at `version` (the plugin degrades gracefully,
-  // logged). `id` values are the SC_API_*_ID string constants.
+  // logged). `id` values are the LOD_API_*_ID string constants.
   virtual void* QueryTable(const char* id, uint32_t version) = 0;
 
   template<typename T>
@@ -135,7 +135,7 @@ public:
 // Example capability interface (frozen at v1):
 class GameplayAPI {
 public:
-  static constexpr const char* kId = "sc.gameplay";
+  static constexpr const char* kId = "lod.gameplay";
   static constexpr uint32_t kVersion = 1;
   virtual ~GameplayAPI() = default;
   virtual uint32_t EntityCount(SceneHandle scene) const = 0;
@@ -149,7 +149,7 @@ public:
   virtual GameState GameState() const = 0;               // enum + chapter...
   virtual Timestamp GameClock() const = 0;
 };
-}  // namespace sc
+}  // namespace lod
 ```
 
 **Value types at the boundary** (SDK header, frozen per version):
@@ -183,7 +183,7 @@ using RegistryId = std::string;            // "modid:entryid" (grammar per mod-l
 ```cpp
 class RegistryAPI {
 public:
-  static constexpr const char* kId = "sc.registry";
+  static constexpr const char* kId = "lod.registry";
   static constexpr uint32_t kVersion = 1;
   virtual ~RegistryAPI() = default;
   // Lazy resolution: missing entry → Err(Status::ModNotLoaded) at USE
@@ -202,11 +202,11 @@ public:
 ## 4. Lifecycle
 
 ```
-discover (mod dir scan: <mod>/native/*.so|dll|dylib + `ScPluginCreateV*` presence)
+discover (mod dir scan: <mod>/native/*.so|dll|dylib + `LoDPluginCreateV*` presence)
   → validate (PluginInfo schema, id uniqueness, dependency closure,
               minAPIVersion <= engine major, toolchain hash match §9.2)
   → load     (dlopen RTLD_LAZY / LoadLibrary / dlopen-macos; symbol lookup
-              ScPluginCreateV<max..1>; capture loader error)
+              LoDPluginCreateV<max..1>; capture loader error)
   → init     (Info() + OnLoad(api): plugin fetches tables via api.Table<T>(),
               registers callbacks/entries; any Err → plugin marked failed,
               unloaded, reported in mod list — parity with Java failed-mod UX)
@@ -235,8 +235,8 @@ discover (mod dir scan: <mod>/native/*.so|dll|dylib + `ScPluginCreateV*` presenc
 
 | Interface (`kId`) | Capabilities |
 |---|---|
-| `sc.gameplay` (`GameplayAPI`) | entity queries/spawn/destroy, transforms, game state/clock, flags |
-| `sc.events` (`EventsAPI`) | subscribe/unsubscribe (§6), post custom events (visible to Luau + native listeners) |
+| `lod.gameplay` (`GameplayAPI`) | entity queries/spawn/destroy, transforms, game state/clock, flags |
+| `lod.events` (`EventsAPI`) | subscribe/unsubscribe (§6), post custom events (visible to Luau + native listeners) |
 | `sc.input` (`InputAPI`) | read action state (pressed/held/repeat/axis), define new actions, bind queries |
 | `sc.render` (`RenderAPI`) | custom draw callbacks on the render event (scoped `RenderScope`: pipelines created via engine builder, textures, vertex/index buffers), post-shader uniform hooks (e.g. `turn_order_bounds`-style) |
 | `sc.audio` (`AudioAPI`) | register music (sequence file refs), play SFX from soundbanks, volume control, music event queries; `[audio-thread]`-marked callbacks documented |
@@ -249,8 +249,8 @@ discover (mod dir scan: <mod>/native/*.so|dll|dylib + `ScPluginCreateV*` presenc
 ## 6. Events (C++)
 
 ```cpp
-// SDK: sc/events.hpp
-namespace sc {
+// SDK: lod/events.hpp
+namespace lod {
 using EventId = std::string;   // "battle.turned", "render", ...
 
 struct Event {
@@ -266,7 +266,7 @@ using EventCallback = std::function<void(const Event&)>;
 
 class EventsAPI {
 public:
-  static constexpr const char* kId = "sc.events";
+  static constexpr const char* kId = "lod.events";
   static constexpr uint32_t kVersion = 1;
   virtual ~EventsAPI() = default;
   // `handler` may be a lambda/std::function capturing plugin state; the
@@ -279,7 +279,7 @@ public:
   virtual std::expected<void, Status> Post(const EventId& id,
                                            const EventPayload& payload) = 0;
 };
-}  // namespace sc
+}  // namespace lod
 ```
 
 - Synchronous dispatch on the calling thread (parity — mod-loader.md §3);
@@ -299,8 +299,8 @@ Java hardcodes addition input to the attack/counter actions
 luau-api.md §4):
 
 ```cpp
-// SDK: sc/combat.hpp
-namespace sc {
+// SDK: lod/combat.hpp
+namespace lod {
 struct AdditionHitState {
   uint32_t frame;                    // sim frame within the hit window
   uint32_t lowerBound, upperBound;   // from AdditionHitProperties10 (× timing-window config)
@@ -333,7 +333,7 @@ public:
                            const std::string& evaluatorId) = 0;
   // battle lifecycle queries...
 };
-}  // namespace sc
+}  // namespace lod
 ```
 
 - Retail content registers the **timing-square evaluator** (attack/counter
@@ -347,11 +347,11 @@ public:
 
 ## 8. SDK Packaging
 
-`sc-sdk` (build-system.md §2):
-- `include/sc/*.hpp` — the frozen interface headers (this contract).
-- `scengine` import library (VS `.lib` / ELF `.so` / Mach-O) — plugins link
+`lod-sdk` (build-system.md §2):
+- `include/lod/*.hpp` — the frozen interface headers (this contract).
+- `lodengine` import library (VS `.lib` / ELF `.so` / Mach-O) — plugins link
   it; symbols resolve against the loaded engine at dlopen time.
-- **Toolchain file** (`sc_toolchain.cmake`): sets C++23,
+- **Toolchain file** (`lod_toolchain.cmake`): sets C++23,
   `-fno-exceptions -fno-rtti` (MSVC `/EHs-c- /GR-`), warning flags,
   visibility flags, and records the toolchain hash string that
   `PluginInfo::toolchain` must carry (a CMake target property the SDK's
@@ -366,7 +366,7 @@ public:
 
 ### 9.1 Versioning
 - **API major** = the `Plugin` entry vtable + `EngineAPI` root layout.
-  Symbol `ScPluginCreateV<MAJOR>`; engine tries newest→oldest.
+  Symbol `LoDPluginCreateV<MAJOR>`; engine tries newest→oldest.
 - **Interface version** (`T::kVersion`) = per-capability class layout.
   `QueryTable(id, version)` returns the highest version ≤ requested that
   the engine provides, or nullptr.

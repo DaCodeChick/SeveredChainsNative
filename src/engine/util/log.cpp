@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace sc::util
+namespace lod
 {
 namespace
 {
@@ -58,9 +58,9 @@ void Logger::LogMessage(LogLevel level, std::string_view tag, std::string_view m
   }
   const auto now = std::chrono::steady_clock::now();
   const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - kOrigin).count();
-  // Line format: [   1234ms] INFO  [tag] message (reference log4j style).
+  // Line format: [   1234ms] INFO  [tag] message.
   const std::string line = std::format("[{:>7}ms] {:<5} [{}] {}\n", elapsedMs, NameOf(level), tag, message);
   std::print("{}", line);
 }
 
-} // namespace sc::util
+} // namespace lod

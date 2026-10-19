@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace sc
+namespace lod
 {
 /// Engine-wide status codes (error-handling.md §2).
 ///
@@ -37,4 +37,4 @@ enum class Status : std::int32_t
 /// @return A `std::string_view` backed by a process-lifetime static string.
 [[nodiscard]] std::string_view ToString(Status status);
 
-} // namespace sc
+} // namespace lod

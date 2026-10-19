@@ -117,7 +117,7 @@ Combat.Animation.play(entity, "anm-ref", {speed=, loop=, onComplete=})
 ```
 
 - The combat engine consumes these through the same evaluator interface the
-  C++23 plugin API exposes (`sc::CombatAPI::AdditionInputEvaluator`,
+  C++23 plugin API exposes (`lod::CombatAPI::AdditionInputEvaluator`,
   native-api.md §7) — **one implementation, two front ends** (Luau and native
   plugins interoperate: a native plugin can read which evaluator an addition
   uses; a Luau mod can react to combat events fired natively).

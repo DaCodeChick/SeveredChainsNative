@@ -91,12 +91,12 @@ Severed Chains' enhancements and modding capabilities.
 
 | Element | Convention | Example |
 |---|---|---|
-| Namespaces | abbreviated flatcase | `sc::render`, `psx::tmd`, `game::combat` |
+| Namespaces | **libraries only** (no per-module/per-class namespaces) | `lod` (engine), `lodgame`, `psx`, `lod::test` |
 | Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `DecompressBPE`, `EntitySpawn`, `OnLoad`, `kMaxVoices`, `Status::Ok` |
 | Variables and parameters | camelCase | `simFrame`, `outCount` |
 | Private fields | camelCase with trailing underscore | `simFrame_`, `outCount_` |
-| Macros | UPPER_SNAKE_CASE | `SC_API`, `SC_NOEXCEPT_TARGETS` |
-| C-linkage discovery symbols (plugin entry only) | PascalCase with `Sc` prefix | `ScPluginCreateV1` |
+| Macros | UPPER_SNAKE_CASE | `LOD_API`, `LOD_NOEXCEPT_TARGETS` |
+| C-linkage discovery symbols (plugin entry only) | PascalCase with `LoD` prefix | `LoDPluginCreateV1` |
 | Files | snake_case | `render_engine.cpp`, `render_engine.hpp` |
 
 - **Acronyms are fully capitalized inside PascalCase identifiers:**
@@ -110,7 +110,7 @@ Severed Chains' enhancements and modding capabilities.
   (e.g. `DecompressBPE(bytes)`, `EngineAPI::QueryTable(...)`,
   `Plugin::OnLoad(...)`); camelCase is reserved for variables/parameters/
   private fields.
-- String *ids* and table id constants (e.g. `"sc.gameplay"`, registry ids,
+- String *ids* and table id constants (e.g. `"lod.gameplay"`, registry ids,
   event ids) are lowercase per the id grammar (mod-loader.md §4) — they are
   identifiers in a string namespace, not C++ identifiers.
 - Third-party API naming is preserved (e.g. SDL_*, luau_*, Qt names stay
@@ -137,7 +137,7 @@ Severed Chains' enhancements and modding capabilities.
   semantics + software reference rasterizer, SPU voice model, XA/SShd/SSSq decoding,
   ISO 9660 (PS1) reading, TMD/TIM/ANM/MRG/DEFF/BPE/Tag formats — zero third-party
   deps, no SDL/Qt/game logic (psx-library.md). **Prefix-free identity** (target
-  `psx`, namespace `psx::` — no Sc/SC/sc; it may be extracted to its own repo),
+  `psx`, namespace `psx::` — no Sc/SC/sc, no LoD/LOD/lod; it may be extracted to its own repo),
   root-level subproject (build form follows CMake `BUILD_SHARED_LIBS` — the
   user's choice). Consumed by engine, game, and tools.
 - **Engine (reusable):** platform/lifecycle, SDL3 GPU rendering, input, audio, assets,
@@ -145,7 +145,7 @@ Severed Chains' enhancements and modding capabilities.
 - **Game (LoD-specific):** characters, combat, Additions, dialogue/events, submaps,
   world map, saves content, retail registries — the equivalent of the Java `lod` mod.
 - **Mogul Dabas minigame:** separate C++23 library (`src/libs/dabas`, target
-  `scdabas`) for the original in-game handheld minigame; first-party content,
+  `loddabas`) for the original in-game handheld minigame; first-party content,
   not a plugin, not PSX
   hardware (dig-dabas.md §5).
 - **Desktop tools (Qt 6):** launcher, mod manager, asset inspection, debuggers.

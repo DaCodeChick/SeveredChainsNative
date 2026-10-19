@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <string>
 
-namespace sc::platform
+namespace lod
 {
 Window::~Window()
 {
@@ -25,13 +25,12 @@ bool Window::Create(const WindowConfig& config)
   window_ = SDL_CreateWindow(config.title.c_str(), width, height, SDL_WINDOW_RESIZABLE);
   if (window_ == nullptr)
   {
-    util::Logger::Instance().LogMessage(util::LogLevel::Error, "window",
-                                        "SDL_CreateWindow failed: " + std::string(SDL_GetError()));
+    Logger::Instance().LogMessage(LogLevel::Error, "window", "SDL_CreateWindow failed: " + std::string(SDL_GetError()));
     return false;
   }
-  // Parity: SdlWindow.java:137 (minimum 320x240).
+  // Enforce the minimum window size.
   SDL_SetWindowMinimumSize(window_, kWindowMinWidth, kWindowMinHeight);
-  util::Logger::Instance().Log(util::LogLevel::Info, "window", "created '{}' at {}x{}", config.title, width, height);
+  Logger::Instance().Log(LogLevel::Info, "window", "created '{}' at {}x{}", config.title, width, height);
   return true;
 }
 
@@ -43,7 +42,7 @@ void Window::Destroy()
   }
   SDL_DestroyWindow(window_);
   window_ = nullptr;
-  util::Logger::Instance().Log(util::LogLevel::Info, "window", "destroyed");
+  Logger::Instance().Log(LogLevel::Info, "window", "destroyed");
 }
 
 bool Window::IsCreated() const
@@ -100,4 +99,4 @@ SDL_Window* Window::Handle() const
   return window_;
 }
 
-} // namespace sc::platform
+} // namespace lod

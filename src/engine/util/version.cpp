@@ -2,24 +2,24 @@
 
 #include <string_view>
 
-#ifndef SC_VERSION
-#  define SC_VERSION "0.0.0"
+#ifndef LOD_VERSION
+#  define LOD_VERSION "0.0.0"
 #endif
-#ifndef SC_COMMIT_HASH
-#  define SC_COMMIT_HASH "unknown"
+#ifndef LOD_COMMIT_HASH
+#  define LOD_COMMIT_HASH "unknown"
 #endif
-#ifndef SC_BUILD_TIMESTAMP
-#  define SC_BUILD_TIMESTAMP "unknown"
+#ifndef LOD_BUILD_TIMESTAMP
+#  define LOD_BUILD_TIMESTAMP "unknown"
 #endif
-#ifndef SC_CHANNEL
-#  define SC_CHANNEL "development"
+#ifndef LOD_CHANNEL
+#  define LOD_CHANNEL "development"
 #endif
 
-namespace sc::util
+namespace lod
 {
 namespace
 {
-constexpr VersionInfo kVersionInfo{SC_VERSION, SC_COMMIT_HASH, SC_BUILD_TIMESTAMP, SC_CHANNEL};
+constexpr VersionInfo kVersionInfo{LOD_VERSION, LOD_COMMIT_HASH, LOD_BUILD_TIMESTAMP, LOD_CHANNEL};
 } // namespace
 
 const VersionInfo& GetVersionInfo()
@@ -32,4 +32,4 @@ bool IsReleaseChannel()
   return GetVersionInfo().channel == "release";
 }
 
-} // namespace sc::util
+} // namespace lod

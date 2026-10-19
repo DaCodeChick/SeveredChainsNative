@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace sc::util
+namespace lod
 {
 /// Build-time version information (build-system.md §5: injected by CMake —
 /// no `__DATE__`/`__TIME__` in code).
@@ -20,10 +20,9 @@ struct VersionInfo
 /// @return A reference to a process-lifetime struct; safe to store.
 [[nodiscard]] const VersionInfo& GetVersionInfo();
 
-/// Release-channel gating (port of the reference `Version.isRelease()`
-/// semantics).
+/// Release-channel gating (true only for release builds).
 ///
 /// @return true when built in the release channel.
 [[nodiscard]] bool IsReleaseChannel();
 
-} // namespace sc::util
+} // namespace lod

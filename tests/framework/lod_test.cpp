@@ -1,9 +1,9 @@
-// Implementation of the test framework (testing.md §1; sc_test.hpp).
-#include "sc_test.hpp"
+// Implementation of the test framework (testing.md §1; lod_test.hpp).
+#include "lod_test.hpp"
 
 #include <string_view>
 
-namespace sc::test
+namespace lod::test
 {
 Registry& Registry::Instance()
 {
@@ -76,4 +76,4 @@ int RunAll(int argc, char** argv)
   return failCount == 0 ? 0 : 1;
 }
 
-} // namespace sc::test
+} // namespace lod::test

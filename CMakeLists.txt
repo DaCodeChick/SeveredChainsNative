@@ -27,12 +27,12 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(versions)
-include(ScToolchain)
-include(ScDeps)
+include(LodToolchain)
+include(LodDeps)
 
-if(SC_DOCS)
-  include(ScDocs)
-  sc_add_doxygen_target()
+if(LOD_DOCS)
+  include(LodDocs)
+  lod_add_doxygen_target()
 endif()
 
 # Build metadata injection (build-system.md §5: no __DATE__/__TIME__ in code —
@@ -42,25 +42,25 @@ if(GIT_FOUND AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/.git)
   execute_process(
     COMMAND ${GIT_EXECUTABLE} rev-parse --short=12 HEAD
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    RESULT_VARIABLE sc_git_result
-    OUTPUT_VARIABLE SC_COMMIT_HASH
+    RESULT_VARIABLE lod_git_result
+    OUTPUT_VARIABLE LOD_COMMIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
-if(NOT SC_COMMIT_HASH)
-  set(SC_COMMIT_HASH "unknown")
+if(NOT LOD_COMMIT_HASH)
+  set(LOD_COMMIT_HASH "unknown")
 endif()
-string(TIMESTAMP SC_BUILD_TIMESTAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
+string(TIMESTAMP LOD_BUILD_TIMESTAMP "%Y-%m-%dT%H:%M:%SZ" UTC)
 
 # Release-channel gating (roadmap M1: Version release-channel gating —
-# port of `Version.isRelease()` semantics via the SC_CHANNEL define).
+# port of `Version.isRelease()` semantics via the LOD_CHANNEL define).
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(SC_CHANNEL "release")
+  set(LOD_CHANNEL "release")
 else()
-  set(SC_CHANNEL "development")
+  set(LOD_CHANNEL "development")
 endif()
-message(STATUS "Build metadata: version=${PROJECT_VERSION} commit=${SC_COMMIT_HASH} built=${SC_BUILD_TIMESTAMP} channel=${SC_CHANNEL}")
+message(STATUS "Build metadata: version=${PROJECT_VERSION} commit=${LOD_COMMIT_HASH} built=${LOD_BUILD_TIMESTAMP} channel=${LOD_CHANNEL}")
 
-include(ScDocs)
+include(LodDocs)
 
 enable_testing()
 

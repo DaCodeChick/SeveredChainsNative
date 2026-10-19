@@ -6,11 +6,10 @@
 #include <cstdint>
 #include <string_view>
 
-namespace sc::platform
+namespace lod
 {
-/// Game actions (M1 foundation subset; the full `InputKey`/`Action` binding
-/// model porting the reference `InputBindings` lands in a later M1
-/// increment).
+/// Game actions (M1 foundation subset; the full key/button binding model
+/// lands in a later M1 increment).
 enum class InputAction : std::int32_t
 {
   None = 0,
@@ -52,4 +51,4 @@ private:
   std::array<bool, static_cast<std::size_t>(InputAction::Count)> held_{};
 };
 
-} // namespace sc::platform
+} // namespace lod

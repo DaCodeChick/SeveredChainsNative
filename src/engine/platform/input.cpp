@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace sc::platform
+namespace lod
 {
 std::string_view ToString(InputAction action)
 {
@@ -71,4 +71,4 @@ InputAction Input::ActionForKey(SDL_Keycode key)
   }
 }
 
-} // namespace sc::platform
+} // namespace lod

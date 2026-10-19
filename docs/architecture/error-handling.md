@@ -31,7 +31,7 @@ exception behavior documented, not assumed away.
 ## 2. Result Types (core convention)
 
 ```cpp
-namespace sc {
+namespace lod {
 // Status code — stable, documented, safe across the plugin ABI (§ native-api)
 enum class Status : int32_t {
   Ok = 0,
@@ -84,10 +84,10 @@ using StatusResult = Result<std::monostate>;   // fire-and-forget ops
   `std::filesystem::is_status_error_code`-style checks via the
   non-throwing `status()` APIs, and `ec` overloads where available).
 - **SDL3** already uses return codes/`SDL_GetError()` — map 1:1 to `Status`
-  (an `ScSdl` error-mapping layer, unit-tested).
+  (an `LoDSdl` error-mapping layer, unit-tested).
 - **Luau VM:** protected calls with out-params (see luau-api §1) — no
   exceptions; compile diagnostics returned as structured values.
-- **Plugins (C++23 API):** the same `sc::Status` enum (native-api.md §1.6) —
+- **Plugins (C++23 API):** the same `lod::Status` enum (native-api.md §1.6) —
   plugin methods return `Status`/`std::expected<T, Status>`; no exceptions
   cross the boundary (both sides compile with exceptions disabled —
   enforced by the SDK toolchain file). Status values are frozen per API
@@ -123,7 +123,7 @@ using StatusResult = Result<std::monostate>;   // fire-and-forget ops
 - `ErrorContext` (thread-local, scoped): current operation string
   (`"load asset SECT/DRGN0.BIN/119/67"`, `"create pipeline tmd:opaque"`);
   failures log `status + context + SDL_GetError()/system message` at the
-  failing site (a `SC_FAIL(ctx, status, "message")` macro — no exceptions,
+  failing site (a `LOD_FAIL(ctx, status, "message")` macro — no exceptions,
   just `log::error(...); return status;`).
 - **Asset errors are first-class** (requirement §12: "explicit error results
   for malformed, missing, or unsupported assets"): each decoder returns

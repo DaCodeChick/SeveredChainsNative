@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace sc::app
+namespace lod
 {
 App::~App()
 {
@@ -17,10 +17,10 @@ App::~App()
 
 Status App::Run(const AppOptions& options)
 {
-  util::Logger::Instance().SetLevel(options.logLevel);
-  const auto& version = util::GetVersionInfo();
-  util::Logger::Instance().Log(util::LogLevel::Info, "app", "Severed Chains {} (commit {}, built {}, channel {})",
-                               version.version, version.commit, version.buildTimestamp, version.channel);
+  Logger::Instance().SetLevel(options.logLevel);
+  const auto& version = GetVersionInfo();
+  Logger::Instance().Log(LogLevel::Info, "app", "Severed Chains {} (commit {}, built {}, channel {})", version.version,
+                         version.commit, version.buildTimestamp, version.channel);
 
   if (!platform_.Init())
   {
@@ -44,8 +44,8 @@ Status App::Run(const AppOptions& options)
   while (!quit)
   {
     // Wait for the next event, bounded by the frame deadline (this is the
-    // M1 pacing; the Action-equivalent scheduler lands with the input-parity
-    // increment).
+    // M1 pacing; the fixed-rate action scheduler lands with the
+    // input-parity increment).
     SDL_Event event{};
     const int64_t waitMs = static_cast<int64_t>(nextFrameMs) - static_cast<int64_t>(nowMs());
     bool haveEvent =
@@ -66,7 +66,7 @@ Status App::Run(const AppOptions& options)
     const uint64_t nowMsValue = nowMs();
     if (nowMsValue - fpsWindowStartMs >= 1'000ULL)
     {
-      util::Logger::Instance().Log(util::LogLevel::Info, "app", "fps: {} (frame {})", fpsCount, frame);
+      Logger::Instance().Log(LogLevel::Info, "app", "fps: {} (frame {})", fpsCount, frame);
       fpsWindowStartMs = nowMsValue;
       fpsCount = 0;
     }
@@ -86,7 +86,7 @@ Status App::Run(const AppOptions& options)
   // Clean shutdown, reverse initialization order.
   window_.Destroy();
   platform_.Shutdown();
-  util::Logger::Instance().Log(util::LogLevel::Info, "app", "shut down cleanly after {} frames", frame);
+  Logger::Instance().Log(LogLevel::Info, "app", "shut down cleanly after {} frames", frame);
   return Status::Ok;
 }
 
@@ -94,22 +94,20 @@ void App::HandleEvent(const SDL_Event& event, bool& quit)
 {
   if (event.type == SDL_EVENT_WINDOW_RESIZED)
   {
-    util::Logger::Instance().Log(util::LogLevel::Info, "window", "resized to {}x{}", event.window.data1,
-                                 event.window.data2);
+    Logger::Instance().Log(LogLevel::Info, "window", "resized to {}x{}", event.window.data1, event.window.data2);
   }
   switch (input_.ProcessEvent(event))
   {
-    case platform::InputAction::Quit:
+    case InputAction::Quit:
       quit = true;
       break;
-    case platform::InputAction::ToggleFullscreen:
+    case InputAction::ToggleFullscreen:
       window_.ToggleFullscreen();
-      util::Logger::Instance().Log(util::LogLevel::Info, "window", "fullscreen toggled: {}",
-                                   window_.IsFullscreen() ? "on" : "off");
+      Logger::Instance().Log(LogLevel::Info, "window", "fullscreen toggled: {}", window_.IsFullscreen() ? "on" : "off");
       break;
     default:
       break;
   }
 }
 
-} // namespace sc::app
+} // namespace lod

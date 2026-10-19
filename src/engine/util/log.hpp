@@ -4,9 +4,9 @@
 #include <mutex>
 #include <string_view>
 
-namespace sc::util
+namespace lod
 {
-/// Diagnostic log level (parity with the reference's log4j levels).
+/// Diagnostic log level.
 enum class LogLevel : int
 {
   Trace = 0,
@@ -23,8 +23,7 @@ enum class LogLevel : int
 [[nodiscard]] std::string_view NameOf(LogLevel level);
 
 /// Process-wide diagnostic logger (roadmap M1 diagnostics: leveled, tagged
-/// "marker", timestamped — line format matches the reference log4j style:
-/// `[time] LEVEL [marker] message`).
+/// "marker", timestamped — line format `[   1234ms] INFO  [marker] message`).
 ///
 /// All subsystem logging goes through the logger (guidelines §3). Formatted
 /// entries take a *literal* format string (`std::format_string`), so a
@@ -73,4 +72,4 @@ private:
   LogLevel level_ = LogLevel::Info;
 };
 
-} // namespace sc::util
+} // namespace lod

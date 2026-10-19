@@ -25,7 +25,7 @@ alternative).
   `/EHs-c-`). No `throw`, `try`, `catch` — ever (AGENTS.md). Error handling
   is `std::expected` and explicit codes (§4).
 - **RTTI disabled on public API targets** (`psx`, engine public API,
-  `sc-sdk`). No `dynamic_cast` in any public header. Engine-internal code
+  `lod-sdk`). No `dynamic_cast` in any public header. Engine-internal code
   may use RTTI only where it does not appear in a public header (AGENTS.md).
 - Warnings: `-Wall -Wextra -Werror` (Clang/GCC), `/W4 /permissive- /WX`
   (MSVC). Warnings are bugs; do not suppress with `#pragma` / `-Wno-*`
@@ -80,16 +80,16 @@ facilities by job:
   disabled) a runtime format error would otherwise terminate the process.
   For a dynamic string, format it first with `std::format` (literal format)
   and pass the result as a value.
-- The process logger (`sc::util::Logger`) is the one diagnostic sink:
+- The process logger (`lod::Logger`) is the one diagnostic sink:
   leveled (`Trace`/`Debug`/`Info`/`Warning`/`Error`), tagged (subsystem
-  "marker" — parity with the reference's log4j markers), timestamped.
-  Log **through the logger**, never `std::print` from subsystem code (the
-  host `main` may `std::print` for CLI output such as `--version`/`--help`).
-  Line format: `[   1234ms] INFO  [marker] message` (reference log4j
-  style). Call-site capture via `std::source_location` is deliberately not
-  on the formatted template path — Clang reports the template body's line
-  there, not the call site; it remains available on non-template logging
-  entry points where it is accurate.
+  "marker"), timestamped. Log **through the logger**, never `std::print`
+  from subsystem code (the host `main` may `std::print` for CLI output such
+  as `--version`/`--help`). Line format:
+  `[   1234ms] INFO  [marker] message`. Call-site capture via
+  `std::source_location` is deliberately not on the formatted template path
+  — Clang reports the template body's line there, not the call site; it
+  remains available on non-template logging entry points where it is
+  accurate.
 - Logging is thread-safe (internal mutex). Format **before** locking.
 - Diagnostic I/O failure (full terminal, closed pipe) under
   `-fno-exceptions` is a terminate condition — an accepted, documented last
@@ -110,7 +110,7 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
   exist (error-handling.md §2).
 - **MUST** mark `std::expected` return values `[[nodiscard]]`. Ignoring an
   error result is a defect.
-- Error *codes* are typed (`sc::Status` engine-wide; `psx::Error` in the
+- Error *codes* are typed (`lod::Status` engine-wide; `psx::Error` in the
   `psx` library) with documented domain ranges and a `ToString`/`NameOf`
   function per enum (diagnostics). **AVOID** returning `false` where an
   `expected`/`Status` carries the *why*; `bool` returns are acceptable only
@@ -194,24 +194,39 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
 
 ## 7. Naming and documentation
 
-- Naming follows the AGENTS.md table exactly: flatcase abbreviated
-  namespaces (`sc::app`, `psx::tmd`, `game::combat`); **PascalCase** for
-  types, functions, *and methods* (free functions and member functions
-  alike), constants (with the `k` prefix), and enum values — with
-  **acronyms fully capitalized** (`EngineAPI`, `XADecoder`, `Rtps`,
+- Naming follows the AGENTS.md table exactly: **library** namespaces only —
+  one namespace per library, *no* per-module or per-class namespaces (the
+  engine is `lod`, the game library `lodgame`, the PSX library `psx`, the
+  test framework `lod::test` to separate the test library from the engine;
+  the `App` class has no namespace of its own); **PascalCase** for types,
+  functions, *and methods* (free functions and member functions alike),
+  constants (with the `k` prefix), and enum values — with **acronyms fully
+  capitalized** (`EngineAPI`, `SDLPlatform`, `XADecoder`, `Rtps`,
   `DecompressBPE`); `Id`/`Ids` is a word, not an acronym; camelCase for
   variables and parameters; `camelCase_` for private fields;
   UPPER_SNAKE_CASE for macros; snake_case files. C-linkage discovery
-  symbols: PascalCase with the `Sc` prefix. String *ids* stay lowercase.
-  Third-party names (SDL_*, luau_*, Qt) are preserved verbatim.
+  symbols: PascalCase with the `LoD` prefix (`LoDPluginCreateV1`). String
+  *ids* stay lowercase. Third-party names (SDL_*, luau_*, Qt) are preserved
+  verbatim.
+- **Prefixes identify the game, not the project.** Code identifiers use
+  `LoD`/`LOD`/`lod` (The Legend of Dragoon — what the code implements).
+  Severed Chains is the *project* name and appears in product branding only
+  (executable `severed-chains`, window title, version strings). The `psx`
+  library is prefix-free (no `LoD`/`LOD`/`lod` either — it is an independent
+  identity).
+- **Acronyms are fully capitalized in every identifier position**
+  (`SDLPlatform`, not `SdlPlatform`; `LOD_ENABLE_UBSAN`, not `Sc_enable_`).
+  **Member names do not repeat the enclosing class name** (`VersionString()`,
+  not `SdlVersionString()`) — the class context is implicit.
 - **MUST**: Doxygen-compatible comments on **all public project-owned C++
   APIs** (AGENTS.md mandate) — purpose, `@param` (in/out, ownership),
   `@return` (and the failure cases with their error codes), ownership and
   thread-safety notes for anything shared or long-lived. Internal helpers
   get comments where the *why* is non-obvious.
-- Comments explain *why* (and, for ports: the reference behavior and its
-  source file, e.g. `// parity: SdlWindow.java:137`), never what the code
-  already says.
+- Comments explain *why*, never what the code already says. **Code
+  comments do not cite the Java implementation** — no `.java` file
+  references, no "parity: `X.java:NN`" notes; state the behavior directly.
+  Java source citations belong in `docs/` (research methodology).
 - `ReflowComments: false` in `.clang-format` exists to keep Doxygen blocks
   intact — do not edit around it.
 
@@ -239,8 +254,9 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
 Macros are permitted **only** for:
 1. **Interop with C headers** that require them (rare; e.g. `extern "C"`
    discovery symbols).
-2. **Bounded registration sugar in the test framework** (`SC_TEST`,
-   `SC_CHECK`, `SC_REQUIRE`) — static-initializer registration has no
+2. **Bounded registration sugar in the test framework** (`LOD_TEST`,
+   `LOD_CHECK`, `LOD_REQUIRE` — and the equivalent `PSX_*` set in the
+   self-contained psx harness) — static-initializer registration has no
    macro-free spelling that stays readable; the macros do no flow control
    and no side effects beyond registration.
 3. Build-system visibility (CMake) — not C++ macros.
@@ -256,7 +272,7 @@ C types leak across the layer into public engine/game APIs.
 ### 9.1 SDL3 (C API — the platform layer)
 
 - `SDL_*` types (`SDL_Window*`, `SDL_Event`, `SDL_Keycode`, `SDL_InitFlags`)
-  are permitted in `sc::platform` (and the host `main` for CLI hints).
+  are permitted in the engine's SDL interop layer (and the host `main` for CLI hints).
 - C strings returned by SDL (`SDL_GetError()`, version strings) are
   converted to `std::string` at the point of use — never stored as
   `const char*` in project state.
@@ -284,7 +300,7 @@ where the "C-like" work legitimately lives, expressed in C++23:
 ### 9.3 Native plugin API
 
 C++23 interfaces across the boundary; the single C-linkage discovery symbol
-(`ScPluginCreateV<N>`) is the only C (native-api.md). No C ABI.
+(`LoDPluginCreateV<N>`) is the only C (native-api.md). No C ABI.
 
 ### 9.4 Qt (desktop tools, M11+)
 
@@ -319,7 +335,7 @@ requires it — never legacy by habit*.
 - Configure-time **compiler policy probes** (build-system.md §2): a `throw`
   TU must fail to compile; a `dynamic_cast` TU must fail on public API
   targets. CI re-runs these on every compiler.
-- **Doxygen** runs over all public headers (target `sc-api-docs`); missing
+- **Doxygen** runs over all public headers (target `lod-api-docs`); missing
   or malformed doc comments on public symbols are a CI defect.
 - Formatted with the root `.clang-format` before review; **do not**
   mass-reformat files you did not touch.

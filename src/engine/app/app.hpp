@@ -6,7 +6,7 @@
 #include "util/log.hpp"
 #include "util/status.hpp"
 
-namespace sc::app
+namespace lod
 {
 /// Application options (M1 foundation).
 struct AppOptions
@@ -16,9 +16,9 @@ struct AppOptions
   /// Target frame rate for the event-loop pacing (frames per second).
   int32_t targetFps = 60;
   /// Window settings (title/size; the minimum size is enforced).
-  platform::WindowConfig window;
+  WindowConfig window;
   /// Minimum log level.
-  util::LogLevel logLevel = util::LogLevel::Info;
+  LogLevel logLevel = LogLevel::Info;
 };
 
 /// The application: owns the platform, window, and input, runs the event
@@ -43,9 +43,9 @@ private:
   /// Handles one event: resize diagnostics + action dispatch.
   void HandleEvent(const SDL_Event& event, bool& quit);
 
-  platform::SdlPlatform platform_;
-  platform::Window window_;
-  platform::Input input_;
+  SDLPlatform platform_;
+  Window window_;
+  Input input_;
 };
 
-} // namespace sc::app
+} // namespace lod

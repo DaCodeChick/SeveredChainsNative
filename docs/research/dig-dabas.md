@@ -155,11 +155,11 @@ Host-side responsibilities (all in `Dabas` adapter, verified):
 
 ## 5. Integration recommendation (native)
 
-**Decision: a separate C++23 library target (`scdabas`) inside the native
+**Decision: a separate C++23 library target (`loddabas`) inside the native
 repo, linked into the game module. The build form is the user's choice
 (CMake's built-in `BUILD_SHARED_LIBS`; the architecture prescribes nothing,
 and nothing functionally *requires* any particular form). Not a plugin; not
-part of `scengine`; not part of the prefix-free `psx` library.**
+part of `lodengine`; not part of the prefix-free `psx` library.**
 
 Rationale:
 1. **Parity with the reference architecture:** the Java project keeps it a
@@ -182,7 +182,7 @@ Rationale:
    form; that choice is the user's (CMake `BUILD_SHARED_LIBS`).
 5. **Testability:** the console has no SDL/Qt dependency (pixels are an
    `int[32]`, audio is a byte callback, time is injectable) — the native
-   `scdabas` keeps that: pure C++23, driven by a host interface; a headless
+   `loddabas` keeps that: pure C++23, driven by a host interface; a headless
    test harness (like the Java standalone `Main`/`TestInterface`) runs the
    ROM logic deterministically (see testing additions).
 

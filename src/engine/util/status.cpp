@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace sc
+namespace lod
 {
 std::string_view ToString(Status status)
 {
@@ -30,4 +30,4 @@ std::string_view ToString(Status status)
   return "Unknown";
 }
 
-} // namespace sc
+} // namespace lod
