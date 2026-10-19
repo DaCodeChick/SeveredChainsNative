@@ -98,12 +98,23 @@ endif()
   plugin builds import it — C++23, `-fno-exceptions -fno-rtti`, the same
   warning/visibility flags, and it records the **toolchain hash** that
   `PluginInfo::toolchain` must carry (the loader enforces the match).
-- **Verification steps (Milestone 1 acceptance):**
-  1. `try_compile` probe with `throw` fails on Clang/GCC/MSVC.
-  2. `try_compile` probe with `dynamic_cast` fails on public API targets.
-  3. Build with `-Werror` on the project sources.
-  4. Link a TU that references a symbol with an EH personality → link
-     failure expected (optional, toolchain-dependent).
+- **Verification (Milestone 1 acceptance — implemented; runs at configure
+  time, FATAL_ERROR on violation):**
+  1. `try_compile` probe: a TU containing `throw` must fail to compile
+     under the sc_noexcept flags on all three toolchains.
+  2. `try_compile` probe: a TU using `dynamic_cast` (polymorphic
+     hierarchy) must fail to compile under the sc_nortti flags. Toolchain
+     nuance: Clang/GCC reject it as a hard error, but MSVC `/GR-`
+     degrades it to **warning C4541** ("unpredictable behavior may
+     result") — the MSVC probe build therefore adds `/WX` to promote the
+     warning to an error.
+  3. Each probe TU additionally carries a preprocessor guard that
+     hard-errors when the compiler reports the policy feature as enabled
+     (`_CPPUNWIND`/`__EXCEPTIONS` for exceptions;
+     `_CPPRTTI`/`__GXX_RTTI` for RTTI), so verification does not depend
+     on any single toolchain's diagnostic behavior
+     (`cmake/probes/throw_probe.cpp`, `cmake/probes/rtti_probe.cpp`).
+  4. Build with `-Werror` on the project sources.
 - Third-party: SDL3/SDL3_image/EnTT/GLM/Luau compile fine with exceptions disabled
   (verified in dependencies.md §3); Qt is the documented boundary.
 

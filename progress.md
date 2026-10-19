@@ -98,6 +98,30 @@ prescriptive guidelines. Delivered:
 | Real-display run (500 frames) | PASS — window opens, event loop runs (~63 fps), clean shutdown log |
 | Legacy-pattern audit | PASS — no `printf`/`va_list`/C-string APIs in project code |
 
+### Windows CI probe fix (2026-10-19)
+
+GitHub CI (windows-latest) failed configure at the RTTI policy probe:
+the `dynamic_cast` TU **compiled** under `/EHs-c- /GR-`. Root cause
+(documented MSVC behavior, warning **C4541**): MSVC `/GR-` degrades an
+RTTI-dependent `dynamic_cast` on a polymorphic type to a *warning*
+("unpredictable behavior may result") instead of the hard error Clang/GCC
+`-fno-rtti` produces — so the probe's expected compile failure never
+happened. Fixed by making the probes toolchain-agnostic:
+
+- **Preprocessor guards in both probe TUs**: hard `#error` when the
+  compiler reports the feature enabled (`_CPPRTTI`/`__GXX_RTTI` for RTTI;
+  `_CPPUNWIND`/`__EXCEPTIONS` for exceptions) — catches missing policy
+  flags regardless of the toolchain's diagnostic behavior.
+- **MSVC RTTI probe now adds `/WX`**: promotes C4541 to an error so the
+  dynamic_cast use is still rejected on MSVC.
+- `try_compile` calls now capture `OUTPUT_VARIABLE` and embed the probe
+  build output in the FATAL_ERROR — the next cross-toolchain surprise
+  shows the exact compile line + diagnostics.
+- All four probe behaviors verified locally on Clang (flags in effect →
+  RTTI/throw hard error; flags missing → `#error` guard fires); build-
+system.md §2 documents the MSVC nuance. Windows/Linux re-run pending the
+  next CI run.
+
 ### Known toolchain findings (documented for future sessions)
 
 - CMake 4.4 `try_compile` source form: policy flags must go through
