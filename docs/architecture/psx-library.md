@@ -112,9 +112,11 @@ seen by Luau (luau-api.md).
   thread-safe"; the rasterizer: "single-context, caller synchronizes").
 - Naming: namespace `psx` (flatcase abbreviation), types PascalCase
   (`psx::tmd::Mesh`), free functions PascalCase with fully capitalized
-  acronyms (`Rtps()`, `DecompressBPE()`), variables/parameters camelCase
-  (`wordCount`), private members `camelCase_`, constants/macros
-  UPPER_SNAKE_CASE. Fixed-point helpers carry their convention in the name
+  acronyms in every position (`DecompressBPE()`, `T::ID`),
+  variables/parameters camelCase (`wordCount`, leading-acronym exception:
+  `id`, `api`), private members `camelCase_`, constants PascalCase (no
+  `k` prefix), macros UPPER_SNAKE_CASE. Fixed-point helpers carry their
+  convention in the name
   (`ToF32`, `ToF0_31`) mirroring the GTE's.
 - Golden-test-first: every module ships byte/sample-exact goldens vs the
   Java reference before the consuming milestone starts (testing.md §2.11,

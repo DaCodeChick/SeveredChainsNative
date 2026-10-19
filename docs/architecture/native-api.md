@@ -125,7 +125,7 @@ public:
 
   template<typename T>
   std::optional<T*> Table(uint32_t version = T::Version) const {
-    return static_cast<T*>(QueryTable(T::Id, version));
+    return static_cast<T*>(QueryTable(T::ID, version));
   }
   // Engine-side diagnostics available to the plugin.
   virtual void Log(Verbosity level, const std::string& tag,
@@ -135,7 +135,7 @@ public:
 // Example capability interface (frozen at v1):
 class GameplayAPI {
 public:
-  static constexpr const char* Id = "lod.gameplay";
+  static constexpr const char* ID = "lod.gameplay";
   static constexpr uint32_t Version = 1;
   virtual ~GameplayAPI() = default;
   virtual uint32_t EntityCount(SceneHandle scene) const = 0;
@@ -183,7 +183,7 @@ using RegistryId = std::string;            // "modid:entryid" (grammar per mod-l
 ```cpp
 class RegistryAPI {
 public:
-  static constexpr const char* Id = "lod.registry";
+  static constexpr const char* ID = "lod.registry";
   static constexpr uint32_t Version = 1;
   virtual ~RegistryAPI() = default;
   // Lazy resolution: missing entry → Err(Status::ModNotLoaded) at USE
@@ -233,7 +233,7 @@ discover (mod dir scan: <mod>/native/*.so|dll|dylib + `LoDPluginCreateV*` presen
 
 ## 5. Capability Areas (interface map)
 
-| Interface (`Id`) | Capabilities |
+| Interface (`ID`) | Capabilities |
 |---|---|
 | `lod.gameplay` (`GameplayAPI`) | entity queries/spawn/destroy, transforms, game state/clock, flags |
 | `lod.events` (`EventsAPI`) | subscribe/unsubscribe (§6), post custom events (visible to Luau + native listeners) |
@@ -251,10 +251,10 @@ discover (mod dir scan: <mod>/native/*.so|dll|dylib + `LoDPluginCreateV*` presen
 ```cpp
 // SDK: lod/events.hpp
 namespace lod {
-using EventId = std::string;   // "battle.turned", "render", ...
+using EventID = std::string;   // "battle.turned", "render", ...
 
 struct Event {
-  EventId id;
+  EventID id;
   uint64_t seq;                       // monotonic
   // Typed payload access (per-event accessors documented 1:1 with the
   // Java event catalog — the catalog table ships in the API reference):
@@ -266,17 +266,17 @@ using EventCallback = std::function<void(const Event&)>;
 
 class EventsAPI {
 public:
-  static constexpr const char* Id = "lod.events";
+  static constexpr const char* ID = "lod.events";
   static constexpr uint32_t Version = 1;
   virtual ~EventsAPI() = default;
   // `handler` may be a lambda/std::function capturing plugin state; the
   // engine copies it (toolchain rule applies). Priority semantics mirror
   // mod-loader.md §3 (higher first; same priority = registration order).
   virtual std::expected<uint32_t, Status>
-      Subscribe(const EventId& id, EventCallback handler,
+      Subscribe(const EventID& id, EventCallback handler,
                 Priority priority = Priority::Normal) = 0;
-  virtual void Unsubscribe(uint32_t subId) = 0;
-  virtual std::expected<void, Status> Post(const EventId& id,
+  virtual void Unsubscribe(uint32_t subID) = 0;
+  virtual std::expected<void, Status> Post(const EventID& id,
                                            const EventPayload& payload) = 0;
 };
 }  // namespace lod
@@ -313,7 +313,7 @@ enum class AdditionHitResult { Pending, Success, FailWrong, FailEarly, FailLate 
 class AdditionInputEvaluator {
 public:
   virtual ~AdditionInputEvaluator() = default;
-  virtual const std::string& Id() const = 0;
+  virtual const std::string& ID() const = 0;
   // Called per sim frame during an addition hit window.
   virtual AdditionHitResult Evaluate(const AdditionHitState& state) = 0;
   // Optional: custom overlay draw (default = the retail timing square).
@@ -322,7 +322,7 @@ public:
 
 class CombatAPI {
 public:
-  static constexpr const char* Id = "lod.combat";
+  static constexpr const char* ID = "lod.combat";
   static constexpr uint32_t Version = 1;
   virtual ~CombatAPI() = default;
   // Ownership: the engine takes the unique_ptr (transfer point, §1.5).

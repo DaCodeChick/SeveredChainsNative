@@ -159,7 +159,7 @@ reverted to `Sc*`; library/target names reverted to `scengine`, `sc-tests`,
 `SC_BUILD_TIMESTAMP`/`SC_CHANNEL` (injected to C++ as the `LOD_*` macros);
 host target `severed-chains` → **`lodsc`**. Docs + AGENTS.md + cpp.md
 synced to the split (incl. `sc-sdk`, `sc_qt_shim`, `sc_toolchain.cmake`,
-`scgame`/`scdabas` targets with the `lodgame` C++ namespace). `psx` stays
+`scgame`/`scdabas` targets with the `game` C++ namespace). `psx` stays
 prefix-free (no Sc/SC/sc, no LoD/LOD/lod).
 
 Other corrections from the same review:
@@ -186,8 +186,18 @@ Other corrections from the same review:
    `kRegistration_*` → `Registration_*`, the `kVersionInfo` instance became
    a function-local `static const VersionInfo info` (avoids the
    type-name collision), doc examples updated (`MaxVoices`,
-   `T::Id`/`T::Version` in native-api.md; also fixed a leftover
+   `T::ID`/`T::Version` in native-api.md; also fixed a leftover
    `"sc.combat"` string id → `"lod.combat"`).
+5. **Acronyms fully capitalized in every position** (owner, 2026-10-19):
+   `Id`/`Sdl`/`Api` → `ID`/`SDL`/`API` even inside PascalCase — the old
+   "`Id`/`Ids` is a word, not an acronym" rule is **retired**. Only
+   exception: a camelCase variable/field may *start* with the acronym
+   meaning the acronym (`id`, `api`, `fps`). Convention updated (cpp.md §7
+   + AGENTS.md); no C++ code identifiers violated it (audited — code
+   already clean: `SDLPlatform`, `LogLevel`, etc.); docs examples fixed
+   (`T::ID`, `EventID`, `subID`, `ID()` in native-api.md; dropped the
+   bogus `Rtps` example). **The game library's namespace is `game`**
+   (owner: "lodgame should simply be game"), not `lodgame`.
 
 M1 work was committed by the owner as `aa253f2` ("Establish the C++23
 application foundation") before this pass; the rename + correction changes

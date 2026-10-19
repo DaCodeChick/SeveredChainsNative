@@ -91,7 +91,7 @@ Severed Chains' enhancements and modding capabilities.
 
 | Element | Convention | Example |
 |---|---|---|
-| Namespaces | **libraries only** (no per-module/per-class namespaces) | `lod` (engine), `lodgame`, `psx`, `lod::test` |
+| Namespaces | **libraries only** (no per-module/per-class namespaces) | `lod` (engine), `game`, `psx`, `lod::test` |
 | Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `DecompressBPE`, `EntitySpawn`, `OnLoad`, `MaxVoices`, `Status::Ok` |
 | Variables and parameters | camelCase | `simFrame`, `outCount` |
 | Private fields | camelCase with trailing underscore | `simFrame_`, `outCount_` |
@@ -99,13 +99,13 @@ Severed Chains' enhancements and modding capabilities.
 | C-linkage discovery symbols (plugin entry only) | PascalCase with `LoD` prefix | `LoDPluginCreateV1` |
 | Files | snake_case | `render_engine.cpp`, `render_engine.hpp` |
 
-- **Acronyms are fully capitalized inside PascalCase identifiers:**
-  `EngineAPI`, `GameplayAPI`, `XADecoder`, `GTEView`, `SFXVoice`, `DecompressBPE` —
-  never `EngineApi` / `XaDecoder` / `GteView` / `DecompressBpe`. The rule
-  applies to type names, function/method names, constants, and enum values.
-- The conventional suffix **`Id` / `Ids` is treated as a word** (matching
-  the reference project's `RegistryId`, `modId`, `entryId`) and is **not**
-  capitalized as an acronym.
+- **Acronyms are fully capitalized in every identifier position, even
+  inside PascalCase:** `EngineAPI`, `GameplayAPI`, `XADecoder`, `GTEView`,
+  `SFXVoice`, `DecompressBPE`, `EventID`, `T::ID` — never `EngineApi` /
+  `XaDecoder` / `GteView` / `DecompressBpe` / `EventId` / `T::Id`. The
+  rule applies to type names, function/method names, constants, and enum
+  values. The only exception: a camelCase variable/field may *start* with
+  the acronym meaning the acronym (`id`, `api`, `fps`).
 - Free functions and struct/class methods alike are PascalCase
   (e.g. `DecompressBPE(bytes)`, `EngineAPI::QueryTable(...)`,
   `Plugin::OnLoad(...)`); camelCase is reserved for variables/parameters/

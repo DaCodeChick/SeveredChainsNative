@@ -196,13 +196,15 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
 
 - Naming follows the AGENTS.md table exactly: **library** namespaces only —
   one namespace per library, *no* per-module or per-class namespaces (the
-  engine is `lod`, the game library `lodgame`, the PSX library `psx`, the
+  engine is `lod`, the game library `game`, the PSX library `psx`, the
   test framework `lod::test` to separate the test library from the engine;
   the `App` class has no namespace of its own); **PascalCase** for types,
   functions, *and methods* (free functions and member functions alike),
-  constants (PascalCase, **no** `k` prefix), and enum values — with **acronyms fully
-  capitalized** (`EngineAPI`, `SDLPlatform`, `XADecoder`, `Rtps`,
-  `DecompressBPE`); `Id`/`Ids` is a word, not an acronym; camelCase for
+  constants (PascalCase, **no** `k` prefix), and enum values — with **acronyms
+  fully capitalized in every position, even inside PascalCase**
+  (`EngineAPI`, `SDLPlatform`, `XADecoder`, `DecompressBPE`; `T::ID`, not
+  `T::Id`); the only exception is a camelCase variable/field that *starts*
+  with the acronym meaning the acronym (`id`, `api`); camelCase for
   variables and parameters; `camelCase_` for private fields;
   UPPER_SNAKE_CASE for macros; snake_case files. C-linkage discovery
   symbols: PascalCase with the `LoD` prefix (`LoDPluginCreateV1`). String
