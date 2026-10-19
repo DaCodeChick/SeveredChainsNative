@@ -141,12 +141,18 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
   no `malloc`/`free`, no `new[]`/`delete[]` in engine/game code. (The `psx`
   library's decoders return owned IR by value — `std::vector`-based — never
   raw allocations.)
-- **C resource ownership**: a C-owned resource (e.g. `SDL_Window*`) is owned
-  by exactly one RAII class, held as a `private` raw pointer named with a
-  comment marking it `C-interop owned resource`, null-checked, released in
-  `Destroy()` + the destructor (idempotent). The raw pointer may be exposed
-  read-only where a later layer needs it (M2 GPU) — documented, and the
-  escape hatch is named `Handle()`.
+- **C resource ownership**: a C-owned resource (e.g. an SDL3 handle) is
+  owned by exactly one RAII class, held in a `std::unique_ptr` **supplied
+  with an explicit custom deleter** (a named namespace-scope lambda —
+  `decltype` names its type in the `unique_ptr` alias — or a small struct),
+  and released idempotently in `Destroy()` + the destructor. `std::make_unique`
+  is used for **complete** types; SDL3 types are **opaque C types**, so
+  `make_unique` cannot apply — the handle returned by the C create
+  function is owned via `reset()` (or direct construction) with the custom
+  deleter. Deleter/alias names follow the acronym rule
+  (`SDLWindowDeleter`, never `SdlWindowDeleter`). The raw pointer may be
+  exposed read-only where a later layer needs it (M2 GPU) — documented as
+  non-owning, and the escape hatch is named `Handle()`.
 - **Value semantics by default**: pass small/cheap types by value
   (integers, enums, `string_view`, `Status`); pass by `const T&` when large
   or lazily evaluated; take `T&&` / use `std::move` when the callee owns.
@@ -281,9 +287,11 @@ C types leak across the layer into public engine/game APIs.
 - C strings returned by SDL (`SDL_GetError()`, version strings) are
   converted to `std::string` at the point of use — never stored as
   `const char*` in project state.
-- `SDL_Window` is owned by the `Window` RAII class (§5). Raw `SDL_Window*`
-  is exposed via `Handle()` only where a later layer (M2 GPU) requires it,
-  documented as an escape hatch.
+- `SDL_Window` is owned by the `Window` RAII class as a `std::unique_ptr`
+  with a custom deleter (`SDLWindowDeleter` — §5; `make_unique` cannot be
+  used for opaque C types). Raw `SDL_Window*` is exposed via `Handle()`
+  only where a later layer (M2 GPU) requires it, documented as a
+  non-owning escape hatch.
 - Above the platform layer, APIs take/return C++ types (our own structs,
   `std::string`, `std::expected`), not SDL types — except the documented
   GPU-layer boundary (M2+), where `SDL_GPU*` handles are wrapped by RAII

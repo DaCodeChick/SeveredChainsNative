@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 namespace lod
@@ -19,12 +20,24 @@ struct WindowConfig
   int32_t height = 720;                 ///< Initial client height in pixels.
 };
 
+/// Custom deleter for an SDL window handle (C interop — guidelines §5/§9.1):
+/// destroys the handle through SDL3. `SDL_Window` is an *opaque* C type, so
+/// the handle cannot be heap-allocated with `std::make_unique` (which needs
+/// a complete type); the handle returned by `SDL_CreateWindow` is instead
+/// owned through a `std::unique_ptr` supplied with this explicit deleter.
+inline const auto SDLWindowDeleter = [](SDL_Window* window) { SDL_DestroyWindow(window); };
+
+/// Owning wrapper for an SDL window handle: `std::unique_ptr` + custom
+/// deleter (`decltype` names the lambda's type — guidelines §5).
+using SDLWindowOwner = std::unique_ptr<SDL_Window, decltype(SDLWindowDeleter)>;
+
 /// SDL3 window (M1 foundation subset: create/show, minimum size, resize,
 /// per-monitor fullscreen toggle).
 ///
-/// Owns its `SDL_Window` (C-interop owned resource — guidelines §5); the
-/// raw handle is exposed read-only via `Handle()` as the escape hatch for
-/// the M2 GPU layer.
+/// Owns its `SDL_Window` handle in a `std::unique_ptr` with a custom
+/// deleter (C-interop owned resource — guidelines §5); the raw handle is
+/// exposed read-only via `Handle()` as the escape hatch for the M2 GPU
+/// layer.
 class Window
 {
 public:
@@ -71,13 +84,14 @@ public:
   /// window-parity increment (requires a Windows machine to verify).
   void ToggleFullscreen();
 
-  /// The raw SDL window (C-interop escape hatch for the M2 GPU layer).
+  /// The raw SDL window (C-interop escape hatch for the M2 GPU layer;
+  /// non-owning — the `unique_ptr` member owns the handle).
   ///
   /// @return The handle, or nullptr when the window is not created.
   [[nodiscard]] SDL_Window* Handle() const;
 
 private:
-  SDL_Window* window_ = nullptr; // C-interop owned resource
+  SDLWindowOwner window_; // C-interop owned resource (unique_ptr + custom deleter)
 };
 
 } // namespace lod

@@ -98,6 +98,31 @@ prescriptive guidelines. Delivered:
 | Real-display run (500 frames) | PASS — window opens, event loop runs (~63 fps), clean shutdown log |
 | Legacy-pattern audit | PASS — no `printf`/`va_list`/C-string APIs in project code |
 
+### SDL3 handle ownership via unique_ptr + custom deleter (2026-10-19)
+
+Owner request: no raw owning C pointers — use `std::unique_ptr` with an
+explicit custom deleter (`make_unique` where the type is complete;
+`decltype` where the deleter is a lambda). Applied to the one raw owning
+pointer in the codebase, `Window::window_` (`SDL_Window*`):
+
+- `SDLWindowDeleter` — namespace-scope lambda in `window.hpp` that calls
+  `SDL_DestroyWindow` (fully capitalized acronym, per the convention);
+  `SDLWindowOwner = std::unique_ptr<SDL_Window, decltype(SDLWindowDeleter)>`
+  aliases the owner type; `Window` now holds an `SDLWindowOwner`.
+- **`make_unique` cannot apply to SDL3 handles**: SDL3 types are *opaque*
+  C types (incomplete in C++), and `make_unique` needs a complete type
+  (`new T(...)`). The handle returned by `SDL_CreateWindow` is therefore
+  owned via `window_.reset(SDL_CreateWindow(...))` with the custom
+  deleter; `Destroy()` uses `window_.reset()` (deleter fires);
+  all C calls take `window_.get()`; `Handle()` returns the non-owning
+  raw handle (documented escape hatch for the M2 GPU layer).
+- Guidelines codified: cpp.md §5 ("C resource ownership" — unique_ptr +
+  explicit custom deleter, make_unique for complete types, opaque C types
+  via reset; `SDLWindowDeleter` naming) and §9.1 (SDL3 interop).
+- Verified: clean build, 16/16 tests, doxygen 0 warnings, format clean,
+  headless + real-display runs (window opens, 300 frames, destroyed via
+  the deleter, clean shutdown). No raw owning C pointers remain.
+
 ### Windows CI probe fix (2026-10-19)
 
 GitHub CI (windows-latest) failed configure at the RTTI policy probe:
