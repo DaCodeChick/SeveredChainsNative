@@ -40,7 +40,7 @@ target_compile_features(psx PUBLIC cxx_std_23)
 # Toolchain policy (build-system.md §2): psx is a public API library —
 # exceptions and RTTI disabled, warnings as errors. Declared inline so the
 # standalone build carries the same policy with no external toolchain file
-# (the main project's ScToolchain.cmake keeps the identical flags).
+# (the main project's toolchain policy keeps the identical flags).
 if(MSVC)
   target_compile_options(psx PRIVATE /EHs-c- /GR- /W4 /permissive- /WX)
 else()

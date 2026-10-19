@@ -18,8 +18,8 @@ measurements; propose tools only when necessity is established.
   zero gameplay-specific benefit; our needs (unit + golden + fuzz harnesses)
   fit a small in-repo harness. *If the team disagrees, the fallback is
   Catch2 (BSD) — flagged for approval in dependencies.md review.*
-- One test binary per area (`lod_tests_engine`, `lod_tests_ps1`,
-  `lod_tests_game`, `lod_tests_abi`, ...) so areas build/run independently;
+- One test binary per area (`sc_tests_engine`, `sc_tests_ps1`,
+  `sc_tests_game`, `sc_tests_abi`, ...) so areas build/run independently;
   a `ctest`-style driver (CMake `add_test`) runs all.
 - **No network, no game data in CI by default:** unit tests use synthetic
   fixtures (hand-built byte buffers for every format) + tiny generated
@@ -194,7 +194,7 @@ surface in the repo, and the parity backbone (psx-library.md):
   Java FateCompiler output (goldens); plus synthetic programs (control flow,
   functions, enums, includes, errors → structured diagnostics, no exceptions).
 
-### 2.13 Mogul Dabas minigame (loddabas)
+### 2.13 Mogul Dabas minigame (scdabas)
 - **Console semantics**: timer/RTC/interrupt/power/DAC behavior unit tests
   (fixed-step host-driven ticks per dig-dabas.md Q-DAB-2 decision);
   32×32 1bpp framebuffer inversion parity with the Java host adapter.

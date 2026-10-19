@@ -15,19 +15,19 @@ psx/                          # reusable PS1 library — target `psx`, namespace
                               #   standalone; a self-contained subproject that may
                               #   be extracted into its own repo. See psx-library.md
 cmake/
-  LodToolchain.cmake           # compiler flags, exception/RTTI policy, sanitizers,
-                              #   lod_add_library (build form follows
+  ScToolchain.cmake           # compiler flags, exception/RTTI policy, sanitizers,
+                              #   sc_add_library (build form follows
                               #   CMake's BUILD_SHARED_LIBS — user's choice)
-  LodDeps.cmake                # dependency resolution (FetchContent/vcpkg/Qt6)
-  LodShader.cmake              # shader build rules (glslang/spirv-cross/dxc)
-  LodPackaging.cmake           # install rules, bundle layout
+  ScDeps.cmake                # dependency resolution (FetchContent/vcpkg/Qt6)
+  ScShader.cmake              # shader build rules (glslang/spirv-cross/dxc)
+  ScPackaging.cmake           # install rules, bundle layout
   versions.cmake              # pinned versions (single source of truth)
-src/engine/CMakeLists.txt     # lodengine (build form: CMake BUILD_SHARED_LIBS)
-src/game/CMakeLists.txt       # lodgame (build form: CMake BUILD_SHARED_LIBS; the
+src/engine/CMakeLists.txt     # scengine (build form: CMake BUILD_SHARED_LIBS)
+src/game/CMakeLists.txt       # scgame (build form: CMake BUILD_SHARED_LIBS; the
                               #   "lod" content lives here)
-src/libs/dabas/CMakeLists.txt # loddabas (build form: CMake BUILD_SHARED_LIBS;
+src/libs/dabas/CMakeLists.txt # scdabas (build form: CMake BUILD_SHARED_LIBS;
                               #   std-only — the Mogul Dabas minigame)
-src/sdk/CMakeLists.txt        # lod-sdk (plugin SDK: frozen headers + toolchain file)
+src/sdk/CMakeLists.txt        # sc-sdk (plugin SDK: frozen headers + toolchain file)
 src/tools/qt/CMakeLists.txt   # launcher, settings, modmanager, debugger, inspector
 src/tools/fate/CMakeLists.txt # fate CLI (pure C++, no Qt; links psx only)
 src/plugins/examples/         # sample plugin (explicitly SHARED — must be
@@ -37,13 +37,13 @@ psx/tests/                    # psx standalone tests (target `psx-tests`, links 
 ```
 
 **Build form (owner decision): the user's choice, via CMake's built-in
-`BUILD_SHARED_LIBS`.** All project-owned libraries (`psx`, `lodengine`,
-`lodgame`, `loddabas`) are declared **without a library type**
+`BUILD_SHARED_LIBS`.** All project-owned libraries (`psx`, `scengine`,
+`scgame`, `scdabas`) are declared **without a library type**
 (`add_library(<name> <sources>)`), so CMake's built-in `BUILD_SHARED_LIBS`
 option selects the build form at configuration time. The architecture
 prescribes no build form and no default — that choice belongs to the user.
-A `lod_add_library(<name> ...)` helper in `LodToolchain.cmake` wraps the
-typeless declaration plus `lod_noexcept`/`lod_nortti` and visibility flags.
+A `sc_add_library(<name> ...)` helper in `ScToolchain.cmake` wraps the
+typeless declaration plus `sc_noexcept`/`sc_nortti` and visibility flags.
 One explicit exception: the **sample plugin is always SHARED** (it must be
 loadable at runtime); the host is always an executable.
 
@@ -51,50 +51,50 @@ loadable at runtime); the host is always an executable.
 | Target | Type | Links |
 |---|---|---|
 | `psx` | library (typeless — `BUILD_SHARED_LIBS` selects the build form); **prefix-free**, **zero third-party deps**; no SDL/Qt/Luau/engine | C++23 std only |
-| `loddabas` | library (typeless); std only; host-interface driven | C++23 std only |
-| `lodengine` | library (typeless); symbol prefix `sc_`, hidden visibility (shared builds) | **psx**, SDL3, SDL3_image, GLM (hdr), EnTT (hdr), Luau, (libcurl/libopus optional) |
-| `lodgame` | library (typeless); the "lod" content module | lodengine, **loddabas** |
-| `severed-chains` (host) | EXECUTABLE (thin) | lodgame, lodengine |
-| `severed-chains-launcher` / `-settings` / `-modmanager` / `-debugger` / `-inspector` | EXECUTABLE | lodengine + Qt6 |
+| `scdabas` | library (typeless); std only; host-interface driven | C++23 std only |
+| `scengine` | library (typeless); symbol prefix `sc_`, hidden visibility (shared builds) | **psx**, SDL3, SDL3_image, GLM (hdr), EnTT (hdr), Luau, (libcurl/libopus optional) |
+| `scgame` | library (typeless); the "lod" content module | scengine, **scdabas** |
+| `lodsc` (host) | EXECUTABLE (thin) — the app (LoD: Severed Chains) | scgame, scengine |
+| `severed-chains-launcher` / `-settings` / `-modmanager` / `-debugger` / `-inspector` | EXECUTABLE | scengine + Qt6 |
 | `fate` | EXECUTABLE | **psx** (script/fate parts — no engine needed) + in-repo fate compiler |
-| `lod-sdk` | INTERFACE (plugin SDK headers + toolchain file; engine import library in shared builds) | — (consumers link lodengine) |
-| `lodplugin_example` | SHARED (explicit — must be loadable at runtime; **C++23 against lod-sdk**) | lodengine (via SDK import lib) |
-| `lod-tests`, `lod-fuzz` | EXECUTABLE | per testing.md |
+| `sc-sdk` | INTERFACE (plugin SDK headers + toolchain file; engine import library in shared builds) | — (consumers link scengine) |
+| `scplugin_example` | SHARED (explicit — must be loadable at runtime; **C++23 against sc-sdk**) | scengine (via SDK import lib) |
+| `sc-tests`, `lod-fuzz` | EXECUTABLE | per testing.md |
 | `psx-tests` | EXECUTABLE (standalone subproject) | psx only |
-| `lod-api-docs` | CUSTOM (doxygen over engine + psx + SDK public headers → `docs/api/`) | — |
+| `sc-api-docs` | CUSTOM (doxygen over engine + psx + SDK public headers → `docs/api/`) | — |
 
 ## 2. Exception- & RTTI-Disabled Enforcement (the core requirement)
 
-`LodToolchain.cmake`:
+`ScToolchain.cmake`:
 ```cmake
 # Applied to EVERY project-owned target via a shared INTERFACE target
-add_library(lod_noexcept INTERFACE)
+add_library(sc_noexcept INTERFACE)
 if(MSVC)
-  target_compile_options(lod_noexcept INTERFACE /EHs-c- /w14458)
+  target_compile_options(sc_noexcept INTERFACE /EHs-c- /w14458)
   # Verify: a probe TU with `throw` must fail to compile (CMake try_compile
   # at configure time, error if it compiles — CI regression guard)
 else()
-  target_compile_options(lod_noexcept INTERFACE -fno-exceptions)
+  target_compile_options(sc_noexcept INTERFACE -fno-exceptions)
 endif()
-target_compile_features(lod_noexcept INTERFACE cxx_std_23)
+target_compile_features(sc_noexcept INTERFACE cxx_std_23)
 
-# Public API targets (psx, lodengine public, lod-sdk) additionally:
-add_library(lod_nortti INTERFACE)
-target_link_libraries(lod_nortti INTERFACE lod_noexcept)
+# Public API targets (psx, scengine public, sc-sdk) additionally:
+add_library(sc_nortti INTERFACE)
+target_link_libraries(sc_nortti INTERFACE sc_noexcept)
 if(MSVC)
-  target_compile_options(lod_nortti INTERFACE /GR-)
+  target_compile_options(sc_nortti INTERFACE /GR-)
 else()
-  target_compile_options(lod_nortti INTERFACE -fno-rtti)
+  target_compile_options(sc_nortti INTERFACE -fno-rtti)
 endif()
 ```
-- Every target: `target_link_libraries(<t> PRIVATE lod_noexcept)`; the
-  **public API targets** (`psx`, `lod-sdk`) additionally link `lod_nortti`
+- Every target: `target_link_libraries(<t> PRIVATE sc_noexcept)`; the
+  **public API targets** (`psx`, `sc-sdk`) additionally link `sc_nortti`
   (AGENTS.md: no RTTI across public API boundaries — the plugin API and
   engine public headers never `dynamic_cast`).
 - **Qt bridge exception:** `qtbridge` sources (the narrow C-shim TUs,
-  qt-integration.md §2) get a `lod_qt_shim` interface *without* the flag
+  qt-integration.md §2) get a `sc_qt_shim` interface *without* the flag
   (documented exception; all other Qt tool code keeps `-fno-exceptions`).
-- **Plugin SDK toolchain file** (`lod_toolchain.cmake`, native-api.md §8):
+- **Plugin SDK toolchain file** (`sc_toolchain.cmake`, native-api.md §8):
   plugin builds import it — C++23, `-fno-exceptions -fno-rtti`, the same
   warning/visibility flags, and it records the **toolchain hash** that
   `PluginInfo::toolchain` must carry (the loader enforces the match).
@@ -114,9 +114,9 @@ endif()
   `prebuilt/VM` via its CMake), SDL3_image. This makes the
   clean-clone build self-contained given network access; CI mirrors
   (cache) for reproducibility.
-- **psx / loddabas:** no dependencies at all — nothing to fetch; they build
+- **psx / scdabas:** no dependencies at all — nothing to fetch; they build
   from their own sources only (psx-library.md §1 is a hard build rule:
-  a CMake audit target fails the build if psx/loddabas link anything but
+  a CMake audit target fails the build if psx/scdabas link anything but
   the C++ standard library). `psx` lives at the repo root (`psx/`) and is
   prefix-free by design.
 - **SDL3:** platform package manager preferred (avoids building SDL from
@@ -133,7 +133,7 @@ endif()
   recorded hashes in `versions.cmake`. They are *executables*, not linked
   libs — no runtime footprint.
 
-## 4. Shader Build Integration (`LodShader.cmake`)
+## 4. Shader Build Integration (`ScShader.cmake`)
 
 - Custom commands per stage (shader-migration.md §4):
   ```
@@ -148,7 +148,7 @@ endif()
   the runtime loads them (or from `--shaders-dir` override for dev reload).
 - Diagnostics: tool stderr is captured; on failure CMake prints
   file:line:col (glslang/dxc native) and the failing command.
-- Optional `LOD_SHADER_VERBOSE` prints the tool invocations.
+- Optional `SC_SHADER_VERBOSE` prints the tool invocations.
 
 ## 5. Configurations & Optimizations
 
@@ -156,11 +156,11 @@ endif()
   on, Luau JIT off) / `RelWithDebInfo` (O2, asserts off, GPU debug off —
   the "dev build" of Java's non-release channel) / `Release` (O3,
   LTO off by default, strips symbols; "isRelease" parity gates: free-cam
-  off, FPS title off — port `Version.isRelease()` semantics to a build
-  define `LOD_RELEASE`).
-- LTO: opt-in (`-flto`/`/GL`+`/LTCG`) behind `LOD_ENABLE_LTO=ON` (measure
+  off, FPS title off — port `Version.isRelease()` semantics to the build
+  variable `SC_CHANNEL` → C++ macro `LOD_CHANNEL`).
+- LTO: opt-in (`-flto`/`/GL`+`/LTCG`) behind `SC_ENABLE_LTO=ON` (measure
   first — no assumption).
-- Sanitizers: `LOD_ENABLE_ASAN/UBSAN/TSAN` options (dev-only; TSAN to
+- Sanitizers: `SC_ENABLE_ASAN/UBSAN/TSAN` options (dev-only; TSAN to
   validate the audio-thread design).
 - Apple Silicon: default arch `arm64` (native) — no x86_64 slice required
   for v1 (documented; universal2 possible later via `CMAKE_OSX_ARCHITECTURES`).
@@ -178,7 +178,7 @@ git clone <this repo> && cd SeveredChainsNative
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build
 # shaders compile during the build (tool auto-download per versions.cmake)
-./build/bin/severed-chains            # game (needs isos/ per asset-pipeline.md)
+./build/bin/lodsc                   # game (the app) (needs isos/ per asset-pipeline.md)
 ```
 
 **Prerequisites:**
@@ -191,7 +191,7 @@ cmake --build build
 ## 7. Packaging & Installation
 
 - **Windows:** per-tool `windeployqt`-style bundling of Qt DLLs; game dir =
-  `severed-chains.exe` + `lodengine.dll` + SDL3 DLL + resources + `mods/` +
+  `lodsc.exe` + `scengine.dll` + SDL3 DLL + resources + `mods/` +
   `isos/` + `files/` (created at first run); NSIS/MSI installer optional in
   v1 (zip-first, like the Java distribution model).
 - **macOS:** `.app` bundle (game + engine framework); notarization notes
@@ -201,7 +201,7 @@ cmake --build build
 - **Install layout (prefix):**
   ```
   bin/               # host + tools
-  lib/               # lodengine, psx, lodgame, loddabas (layout follows
+  lib/               # scengine, psx, scgame, scdabas (layout follows
                      #   BUILD_SHARED_LIBS); Qt per system installation
   resources/         # shaders (compiled), fonts, UI art (non-copyrighted)
   share/             # gamecontrollerdb.txt (SDL game controller db — shipped

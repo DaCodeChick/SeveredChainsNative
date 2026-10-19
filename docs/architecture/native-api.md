@@ -8,7 +8,7 @@ registry exposure; no `psx::` type exposure; not Qt's plugin system.
 
 ## 1. Core Principles
 
-1. **The engine exports; plugins consume.** `lodengine` builds as a shared
+1. **The engine exports; plugins consume.** `scengine` builds as a shared
    library; the player-facing executable is a thin host; standalone tools
    (Qt debugger, fate CLI) link the same engine. *(Unchanged from Phase 0.)*
 2. **C++23 at the boundary.** Plugins are C++23 shared libraries built
@@ -347,11 +347,11 @@ public:
 
 ## 8. SDK Packaging
 
-`lod-sdk` (build-system.md §2):
+`sc-sdk` (build-system.md §2):
 - `include/lod/*.hpp` — the frozen interface headers (this contract).
-- `lodengine` import library (VS `.lib` / ELF `.so` / Mach-O) — plugins link
+- `scengine` import library (VS `.lib` / ELF `.so` / Mach-O) — plugins link
   it; symbols resolve against the loaded engine at dlopen time.
-- **Toolchain file** (`lod_toolchain.cmake`): sets C++23,
+- **Toolchain file** (`sc_toolchain.cmake`): sets C++23,
   `-fno-exceptions -fno-rtti` (MSVC `/EHs-c- /GR-`), warning flags,
   visibility flags, and records the toolchain hash string that
   `PluginInfo::toolchain` must carry (a CMake target property the SDK's

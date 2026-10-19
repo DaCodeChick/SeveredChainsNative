@@ -62,7 +62,7 @@ src/
     title/ submap/ wmap/ battle/ inventory/ text/ credits/ fmv/
     (each state: state object + tick/postScriptTick/overlayTick + save data)
   libs/
-    dabas/                   # loddabas — Mogul Dabas handheld console + minigame
+    dabas/                   # scdabas — Mogul Dabas handheld console + minigame
                              #   logic port (no SDL/Qt; host-interface driven)
   tools/
     qt/                      # Qt 6 desktop: launcher, settings, mod manager,

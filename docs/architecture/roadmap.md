@@ -22,7 +22,7 @@ that has a documented fallback.)*
 
 ## Milestone 1 — Application Foundation
 
-**Scope:** CMake+Ninja project skeleton (build-system.md); `lod_noexcept`
+**Scope:** CMake+Ninja project skeleton (build-system.md); `sc_noexcept`
 enforcement + `throw`-probe; SDL3 init (video+gamepad), window creation
 (port of `SdlWindow` semantics: min size 320×240, resize, fullscreen
 per-monitor incl. the Windows borderless +1px hack, monitor config),
@@ -70,7 +70,7 @@ first modules (`psx::bpe`, `psx::xa`, `psx::tag`, `psx::gte`) so the
 golden suite (testing.md §2.11) is green from the library's first commit —
 it is dependency-free and needs no GPU/SDL, so it proceeds in parallel
 with the graphics work.
-**Deliverables:** `lodengine` GPU layer; test scene rendering on the
+**Deliverables:** `scengine` GPU layer; test scene rendering on the
 default backend; pipeline-creation smoke test infrastructure; `psx`
 target + initial modules + standalone `psx-tests`.
 **Acceptance:**
@@ -107,7 +107,7 @@ discrete switching, like Java's GPU_PREFERENCE scenario).
 
 ## Milestone 4 — Shader Pipeline
 
-**Scope:** shader build integration (LodShader.cmake): GLSL sources (ported
+**Scope:** shader build integration (ScShader.cmake): GLSL sources (ported
 from `gfx/shaders`, reorganized per shader-migration.md §5 binding
 conventions) → glslang → SPIR-V → (SPIRV-Cross → MSL) → (SPIRV-Cross → HLSL
 → DXC → DXIL); content-hash caching + install layout; runtime artifact
@@ -294,7 +294,7 @@ save/load screens), **Saves** (Tag V10 full, migrators, per-save configs,
 memcard import, crash recovery save, `SavedGame`/`Campaign` model,
 Write/ReadSaveData events), story scripts live (VM drives events: flags,
 cutscene triggers, object on/off, engine-state transitions), **Mogul
-Dabas minigame** (loddabas port: handheld console — timers/RTC/interrupts/
+Dabas minigame** (scdabas port: handheld console — timers/RTC/interrupts/
 power/DAC/32×32 1bpp framebuffer, host-driven fixed-step ticks per
 dig-dabas.md Q-DAB-2; game-logic port with ROM data tables; the host
 adapter (render hijack, 5-button input mapping, mono8 audio source,
@@ -386,7 +386,7 @@ load order, asset override chain live, lang overrides, enabled-set),
 boundary, bytecode precompile cache, all namespaces implemented:
 Engine/Assets/Input/Render/Combat/Characters/Items/Saves/Audio/Script/Mod —
 full parity surface luau-api §3), **native plugin host** (the **C++23
-plugin API** live per native-api.md: `lod-sdk` (frozen interface headers +
+plugin API** live per native-api.md: `sc-sdk` (frozen interface headers +
 toolchain file), entry-symbol discovery (`LoDPluginCreateV<N>`), toolchain-
 parity check, capability interfaces `lod::GameplayAPI/EventsAPI/InputAPI/
 RenderAPI/AudioAPI/AssetsAPI/SaveAPI/ScriptAPI/CombatAPI/LogAPI`,

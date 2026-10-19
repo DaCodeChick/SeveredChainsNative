@@ -91,7 +91,7 @@ Severed Chains' enhancements and modding capabilities.
 
 | Element | Convention | Example |
 |---|---|---|
-| Namespaces | **libraries only** (no per-module/per-class namespaces) | `lod` (engine), `lodgame`, `psx`, `lod::test` |
+| Namespaces | **libraries only** (no per-module/per-class namespaces) | `lod` (engine), `scgame`, `psx`, `lod::test` |
 | Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `DecompressBPE`, `EntitySpawn`, `OnLoad`, `kMaxVoices`, `Status::Ok` |
 | Variables and parameters | camelCase | `simFrame`, `outCount` |
 | Private fields | camelCase with trailing underscore | `simFrame_`, `outCount_` |
@@ -145,7 +145,7 @@ Severed Chains' enhancements and modding capabilities.
 - **Game (LoD-specific):** characters, combat, Additions, dialogue/events, submaps,
   world map, saves content, retail registries — the equivalent of the Java `lod` mod.
 - **Mogul Dabas minigame:** separate C++23 library (`src/libs/dabas`, target
-  `loddabas`) for the original in-game handheld minigame; first-party content,
+  `scdabas`) for the original in-game handheld minigame; first-party content,
   not a plugin, not PSX
   hardware (dig-dabas.md §5).
 - **Desktop tools (Qt 6):** launcher, mod manager, asset inspection, debuggers.

@@ -6,13 +6,13 @@
 # Preferred: find_package (Homebrew on macOS, apt/libsdl3-dev on Linux,
 # vcpkg on Windows). Fallback: pinned release built from source — documented
 # and used automatically when no system SDL3 is present (e.g. CI Windows).
-find_package(SDL3 ${LOD_SDL3_MINIMUM} QUIET)
+find_package(SDL3 ${SC_SDL3_MINIMUM} QUIET)
 if(NOT SDL3_FOUND)
-  message(STATUS "SDL3 >= ${LOD_SDL3_MINIMUM} not found on the system — fetching pinned release ${LOD_SDL3_FETCH_VERSION} (build-system.md §3 fallback)")
+  message(STATUS "SDL3 >= ${SC_SDL3_MINIMUM} not found on the system — fetching pinned release ${SC_SDL3_FETCH_VERSION} (build-system.md §3 fallback)")
   include(FetchContent)
   FetchContent_Declare(SDL3
-    URL ${LOD_SDL3_FETCH_URL}
-    URL_HASH SHA256=${LOD_SDL3_FETCH_SHA256}
+    URL ${SC_SDL3_FETCH_URL}
+    URL_HASH SHA256=${SC_SDL3_FETCH_SHA256}
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
   # Build SDL3 as a shared library (standard deployment, build-system.md §7);
   # disable its tests/examples for a lean fetch.

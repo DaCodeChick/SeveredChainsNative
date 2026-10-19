@@ -25,7 +25,7 @@ alternative).
   `/EHs-c-`). No `throw`, `try`, `catch` — ever (AGENTS.md). Error handling
   is `std::expected` and explicit codes (§4).
 - **RTTI disabled on public API targets** (`psx`, engine public API,
-  `lod-sdk`). No `dynamic_cast` in any public header. Engine-internal code
+  `sc-sdk`). No `dynamic_cast` in any public header. Engine-internal code
   may use RTTI only where it does not appear in a public header (AGENTS.md).
 - Warnings: `-Wall -Wextra -Werror` (Clang/GCC), `/W4 /permissive- /WX`
   (MSVC). Warnings are bugs; do not suppress with `#pragma` / `-Wno-*`
@@ -208,14 +208,17 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
   symbols: PascalCase with the `LoD` prefix (`LoDPluginCreateV1`). String
   *ids* stay lowercase. Third-party names (SDL_*, luau_*, Qt) are preserved
   verbatim.
-- **Prefixes identify the game, not the project.** Code identifiers use
-  `LoD`/`LOD`/`lod` (The Legend of Dragoon — what the code implements).
-  Severed Chains is the *project* name and appears in product branding only
-  (executable `severed-chains`, window title, version strings). The `psx`
-  library is prefix-free (no `LoD`/`LOD`/`lod` either — it is an independent
+- **Prefixes by domain.** C++ code identifiers (namespaces, types, C++
+  macros, C-linkage symbols, C++ file names) use `LoD`/`LOD`/`lod` — The
+  Legend of Dragoon is what the code implements. The build system (CMake
+  files, target names, CMake variables/options) uses the project prefix
+  `Sc`/`SC`/`sc` — Severed Chains is the *project*. Product: the app
+  executable is `lodsc` (LoD: Severed Chains); the window title and version
+  strings carry the product name. The `psx` library is prefix-free (no
+  `Sc`/`SC`/`sc` *and* no `LoD`/`LOD`/`lod` — it is an independent
   identity).
 - **Acronyms are fully capitalized in every identifier position**
-  (`SDLPlatform`, not `SdlPlatform`; `LOD_ENABLE_UBSAN`, not `Sc_enable_`).
+  (`SDLPlatform`, not `SdlPlatform`; `SC_ENABLE_UBSAN`, not `Sc_enable_`).
   **Member names do not repeat the enclosing class name** (`VersionString()`,
   not `SdlVersionString()`) — the class context is implicit.
 - **MUST**: Doxygen-compatible comments on **all public project-owned C++
@@ -335,7 +338,7 @@ requires it — never legacy by habit*.
 - Configure-time **compiler policy probes** (build-system.md §2): a `throw`
   TU must fail to compile; a `dynamic_cast` TU must fail on public API
   targets. CI re-runs these on every compiler.
-- **Doxygen** runs over all public headers (target `lod-api-docs`); missing
+- **Doxygen** runs over all public headers (target `sc-api-docs`); missing
   or malformed doc comments on public symbols are a CI defect.
 - Formatted with the root `.clang-format` before review; **do not**
   mass-reformat files you did not touch.

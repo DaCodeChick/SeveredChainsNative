@@ -21,7 +21,7 @@ maintenance and explicit approval.
 | Library | Deps | Role | Notes |
 |---|---|---|---|
 | `psx` (psx-library.md) | **none** (C++23 std only) | GTE, PS1 GPU semantics + software reference rasterizer, SPU model, XA/SSSq, ISO9660, TMD/TIM/ANM/MRG/DEFF/BPE/Tag, script dis/asm tooling | zero-dep is a hard build rule; prefix-free target (independent identity); build form follows CMake `BUILD_SHARED_LIBS` (user's choice); consumed by engine, game, tools, fate CLI |
-| `loddabas` (dig-dabas.md §5) | **none** (C++23 std only) | Mogul Dabas minigame (handheld console + game logic port) | host-interface driven; linked into lodgame |
+| `scdabas` (dig-dabas.md §5) | **none** (C++23 std only) | Mogul Dabas minigame (handheld console + game logic port) | host-interface driven; linked into scgame |
 
 ## 2. Requiring Approval (identified by research)
 

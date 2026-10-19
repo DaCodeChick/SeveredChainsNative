@@ -19,7 +19,7 @@ renders through SDL3 GPU — never Qt widgets.
 ## 2. Engine Independence & Coexistence
 
 - The game engine never links Qt. Qt tools link **the engine library**
-  (`lodengine`) for: config access, mod manifest reading, asset decoding
+  (`scengine`) for: config access, mod manifest reading, asset decoding
   (engine `ps1` decoders — no GPU device needed for decoding), Tag
   serialization, save reading.
 - **Window ownership / event loops:** game window = SDL3. Qt tools are

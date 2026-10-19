@@ -5,7 +5,7 @@
 // psx is an independent subproject (psx-library.md §1) that may be extracted
 // to its own repository, so its test suite does not depend on the host
 // repository's test framework. The API shape mirrors
-// `tests/framework/sc_test.hpp` so test files port 1:1 between the two
+// `tests/framework/lod_test.hpp` so test files port 1:1 between the two
 // harnesses.
 
 #include <print>

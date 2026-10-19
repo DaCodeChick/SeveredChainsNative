@@ -13,7 +13,7 @@ target_compile_features(psx-tests PRIVATE cxx_std_23)
 
 # Toolchain policy (build-system.md §2): exceptions disabled and warnings as
 # errors on every project-owned target. Declared inline so the standalone
-# build carries the same policy without the main project's ScToolchain.cmake.
+# build carries the same policy without the main project's toolchain file.
 if(MSVC)
   target_compile_options(psx-tests PRIVATE /EHs-c- /W4 /permissive- /WX)
 else()
