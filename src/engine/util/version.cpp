@@ -17,14 +17,11 @@
 
 namespace lod
 {
-namespace
-{
-constexpr VersionInfo kVersionInfo{LOD_VERSION, LOD_COMMIT_HASH, LOD_BUILD_TIMESTAMP, LOD_CHANNEL};
-} // namespace
-
 const VersionInfo& GetVersionInfo()
 {
-  return kVersionInfo;
+  // Process-lifetime instance (constant after construction).
+  static const VersionInfo info{LOD_VERSION, LOD_COMMIT_HASH, LOD_BUILD_TIMESTAMP, LOD_CHANNEL};
+  return info;
 }
 
 bool IsReleaseChannel()

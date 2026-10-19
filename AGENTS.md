@@ -91,8 +91,8 @@ Severed Chains' enhancements and modding capabilities.
 
 | Element | Convention | Example |
 |---|---|---|
-| Namespaces | **libraries only** (no per-module/per-class namespaces) | `lod` (engine), `scgame`, `psx`, `lod::test` |
-| Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `DecompressBPE`, `EntitySpawn`, `OnLoad`, `kMaxVoices`, `Status::Ok` |
+| Namespaces | **libraries only** (no per-module/per-class namespaces) | `lod` (engine), `lodgame`, `psx`, `lod::test` |
+| Classes, structs, functions, methods, constants, enum values | PascalCase | `RenderEngine`, `DecompressBPE`, `EntitySpawn`, `OnLoad`, `MaxVoices`, `Status::Ok` |
 | Variables and parameters | camelCase | `simFrame`, `outCount` |
 | Private fields | camelCase with trailing underscore | `simFrame_`, `outCount_` |
 | Macros | UPPER_SNAKE_CASE | `LOD_API`, `LOD_NOEXCEPT_TARGETS` |

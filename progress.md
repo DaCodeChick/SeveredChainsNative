@@ -178,6 +178,16 @@ Other corrections from the same review:
    `sc::app` merged into the single engine namespace `lod` (the `App` class
    has no namespace of its own; the test framework keeps `lod::test` as the
    separate test library's namespace).
+4. **No `k` prefix on constants** (owner, 2026-10-19): convention updated
+   (cpp.md §7 + AGENTS.md: PascalCase, no `k` prefix) and applied —
+   `kWindowMinWidth`/`kWindowMinHeight` → `WindowMinWidth`/`WindowMinHeight`,
+   `kOrigin` → `Origin`, psx `kMajorVersion`/`kMinorVersion`/`kPatchVersion`
+   → `MajorVersion`/`MinorVersion`/`PatchVersion`, test-framework registrar
+   `kRegistration_*` → `Registration_*`, the `kVersionInfo` instance became
+   a function-local `static const VersionInfo info` (avoids the
+   type-name collision), doc examples updated (`MaxVoices`,
+   `T::Id`/`T::Version` in native-api.md; also fixed a leftover
+   `"sc.combat"` string id → `"lod.combat"`).
 
 M1 work was committed by the owner as `aa253f2` ("Establish the C++23
 application foundation") before this pass; the rename + correction changes

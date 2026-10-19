@@ -11,7 +11,7 @@ namespace lod
 namespace
 {
 /// Monotonic origin for log timestamps (milliseconds since first use).
-const std::chrono::steady_clock::time_point kOrigin = std::chrono::steady_clock::now();
+const std::chrono::steady_clock::time_point Origin = std::chrono::steady_clock::now();
 } // namespace
 
 std::string_view NameOf(LogLevel level)
@@ -57,7 +57,7 @@ void Logger::LogMessage(LogLevel level, std::string_view tag, std::string_view m
     return;
   }
   const auto now = std::chrono::steady_clock::now();
-  const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - kOrigin).count();
+  const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - Origin).count();
   // Line format: [   1234ms] INFO  [tag] message.
   const std::string line = std::format("[{:>7}ms] {:<5} [{}] {}\n", elapsedMs, NameOf(level), tag, message);
   std::print("{}", line);

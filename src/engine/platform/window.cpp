@@ -20,8 +20,8 @@ bool Window::Create(const WindowConfig& config)
   {
     return true;
   }
-  const auto width = std::max(config.width, kWindowMinWidth);
-  const auto height = std::max(config.height, kWindowMinHeight);
+  const auto width = std::max(config.width, WindowMinWidth);
+  const auto height = std::max(config.height, WindowMinHeight);
   window_ = SDL_CreateWindow(config.title.c_str(), width, height, SDL_WINDOW_RESIZABLE);
   if (window_ == nullptr)
   {
@@ -29,7 +29,7 @@ bool Window::Create(const WindowConfig& config)
     return false;
   }
   // Enforce the minimum window size.
-  SDL_SetWindowMinimumSize(window_, kWindowMinWidth, kWindowMinHeight);
+  SDL_SetWindowMinimumSize(window_, WindowMinWidth, WindowMinHeight);
   Logger::Instance().Log(LogLevel::Info, "window", "created '{}' at {}x{}", config.title, width, height);
   return true;
 }
@@ -75,7 +75,7 @@ void Window::SetSize(int32_t width, int32_t height)
   {
     return;
   }
-  SDL_SetWindowSize(window_, std::max(width, kWindowMinWidth), std::max(height, kWindowMinHeight));
+  SDL_SetWindowSize(window_, std::max(width, WindowMinWidth), std::max(height, WindowMinHeight));
 }
 
 bool Window::IsFullscreen() const

@@ -8,7 +8,7 @@ namespace psx
 {
 std::string_view VersionString()
 {
-  static const std::string version = std::format("{}.{}.{}", kMajorVersion, kMinorVersion, kPatchVersion);
+  static const std::string version = std::format("{}.{}.{}", MajorVersion, MinorVersion, PatchVersion);
   return version;
 }
 

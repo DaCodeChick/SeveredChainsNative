@@ -170,7 +170,7 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
   NameOf(...)` (or `ToString`) for diagnostics.
 - **MUST** use `constexpr` for compile-time constants and `consteval` for
   compile-time-only computation. Integer constants are named
-  (`kWindowMinWidth`), never bare literals in logic.
+  (`WindowMinWidth`), never bare literals in logic.
 - **MUST** mark query functions, conversions, and error-returning functions
   `[[nodiscard]]`.
 - **MUST** default member functions to `const`; drop `const` only to
@@ -200,7 +200,7 @@ util::Logger::Instance().Log(util::LogLevel::Info, "window",
   test framework `lod::test` to separate the test library from the engine;
   the `App` class has no namespace of its own); **PascalCase** for types,
   functions, *and methods* (free functions and member functions alike),
-  constants (with the `k` prefix), and enum values — with **acronyms fully
+  constants (PascalCase, **no** `k` prefix), and enum values — with **acronyms fully
   capitalized** (`EngineAPI`, `SDLPlatform`, `XADecoder`, `Rtps`,
   `DecompressBPE`); `Id`/`Ids` is a word, not an acronym; camelCase for
   variables and parameters; `camelCase_` for private fields;

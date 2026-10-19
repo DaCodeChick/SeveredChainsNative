@@ -8,8 +8,8 @@
 namespace lod
 {
 /// Minimum window size (320x240).
-inline constexpr int32_t kWindowMinWidth = 320;
-inline constexpr int32_t kWindowMinHeight = 240;
+inline constexpr int32_t WindowMinWidth = 320;
+inline constexpr int32_t WindowMinHeight = 240;
 
 /// Window creation settings (default client size: 960x720).
 struct WindowConfig

@@ -85,7 +85,7 @@ struct TestRegistration
   static bool Test_##name();                                                                                           \
   namespace                                                                                                            \
   {                                                                                                                    \
-  const TestRegistration kRegistration_##name{#name, tags, &Test_##name};                                              \
+  const TestRegistration Registration_##name{#name, tags, &Test_##name};                                               \
   }                                                                                                                    \
   static bool Test_##name()
 

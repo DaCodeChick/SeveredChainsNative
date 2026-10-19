@@ -124,8 +124,8 @@ public:
   virtual void* QueryTable(const char* id, uint32_t version) = 0;
 
   template<typename T>
-  std::optional<T*> Table(uint32_t version = T::kVersion) const {
-    return static_cast<T*>(QueryTable(T::kId, version));
+  std::optional<T*> Table(uint32_t version = T::Version) const {
+    return static_cast<T*>(QueryTable(T::Id, version));
   }
   // Engine-side diagnostics available to the plugin.
   virtual void Log(Verbosity level, const std::string& tag,
@@ -135,8 +135,8 @@ public:
 // Example capability interface (frozen at v1):
 class GameplayAPI {
 public:
-  static constexpr const char* kId = "lod.gameplay";
-  static constexpr uint32_t kVersion = 1;
+  static constexpr const char* Id = "lod.gameplay";
+  static constexpr uint32_t Version = 1;
   virtual ~GameplayAPI() = default;
   virtual uint32_t EntityCount(SceneHandle scene) const = 0;
   virtual std::expected<uint32_t, Status>
@@ -183,8 +183,8 @@ using RegistryId = std::string;            // "modid:entryid" (grammar per mod-l
 ```cpp
 class RegistryAPI {
 public:
-  static constexpr const char* kId = "lod.registry";
-  static constexpr uint32_t kVersion = 1;
+  static constexpr const char* Id = "lod.registry";
+  static constexpr uint32_t Version = 1;
   virtual ~RegistryAPI() = default;
   // Lazy resolution: missing entry → Err(Status::ModNotLoaded) at USE
   // time (parity with Java RegistryDelegate behavior), attributed to the
@@ -233,7 +233,7 @@ discover (mod dir scan: <mod>/native/*.so|dll|dylib + `LoDPluginCreateV*` presen
 
 ## 5. Capability Areas (interface map)
 
-| Interface (`kId`) | Capabilities |
+| Interface (`Id`) | Capabilities |
 |---|---|
 | `lod.gameplay` (`GameplayAPI`) | entity queries/spawn/destroy, transforms, game state/clock, flags |
 | `lod.events` (`EventsAPI`) | subscribe/unsubscribe (§6), post custom events (visible to Luau + native listeners) |
@@ -266,8 +266,8 @@ using EventCallback = std::function<void(const Event&)>;
 
 class EventsAPI {
 public:
-  static constexpr const char* kId = "lod.events";
-  static constexpr uint32_t kVersion = 1;
+  static constexpr const char* Id = "lod.events";
+  static constexpr uint32_t Version = 1;
   virtual ~EventsAPI() = default;
   // `handler` may be a lambda/std::function capturing plugin state; the
   // engine copies it (toolchain rule applies). Priority semantics mirror
@@ -322,8 +322,8 @@ public:
 
 class CombatAPI {
 public:
-  static constexpr const char* kId = "sc.combat";
-  static constexpr uint32_t kVersion = 1;
+  static constexpr const char* Id = "lod.combat";
+  static constexpr uint32_t Version = 1;
   virtual ~CombatAPI() = default;
   // Ownership: the engine takes the unique_ptr (transfer point, §1.5).
   virtual std::expected<void, Status>
@@ -367,13 +367,13 @@ public:
 ### 9.1 Versioning
 - **API major** = the `Plugin` entry vtable + `EngineAPI` root layout.
   Symbol `LoDPluginCreateV<MAJOR>`; engine tries newest→oldest.
-- **Interface version** (`T::kVersion`) = per-capability class layout.
+- **Interface version** (`T::Version`) = per-capability class layout.
   `QueryTable(id, version)` returns the highest version ≤ requested that
   the engine provides, or nullptr.
 - Within a major: **frozen layout** — no added virtuals, data members, or
   changed enum values on shipped classes/structs; additive changes only
   (new methods appear only in a *new* interface class or a new version of
-  that interface, `kVersion` bumped, old version retained).
+  that interface, `Version` bumped, old version retained).
 - Breaking change = new major + old symbols/versions retained until the
   deprecation policy says otherwise (semver on the API itself).
 

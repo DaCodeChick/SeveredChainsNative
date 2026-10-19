@@ -9,9 +9,9 @@
 
 PSX_TEST(CoreVersion, "core")
 {
-  PSX_REQUIRE(psx::kMajorVersion == 0);
-  PSX_REQUIRE(psx::kMinorVersion == 1);
-  PSX_REQUIRE(psx::kPatchVersion == 0);
+  PSX_REQUIRE(psx::MajorVersion == 0);
+  PSX_REQUIRE(psx::MinorVersion == 1);
+  PSX_REQUIRE(psx::PatchVersion == 0);
   const std::string_view version = psx::VersionString();
   PSX_REQUIRE(version == "0.1.0");
   return true;
