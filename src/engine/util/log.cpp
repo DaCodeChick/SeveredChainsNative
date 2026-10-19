@@ -50,6 +50,37 @@ LogLevel Logger::Level() const
   return level_;
 }
 
+void Logger::AttachFile(const std::filesystem::path& file)
+{
+  std::scoped_lock lock(mutex_);
+  logStream_.close();
+  logFile_ = file.string();
+  logStream_.open(file, std::ios::out | std::ios::app);
+}
+
+void Logger::DetachFile()
+{
+  std::scoped_lock lock(mutex_);
+  logStream_.close();
+  logFile_.clear();
+}
+
+std::string_view Logger::LogFilePath() const
+{
+  std::scoped_lock lock(mutex_);
+  return logFile_;
+}
+
+void Logger::AppendFileText(std::string_view text)
+{
+  std::scoped_lock lock(mutex_);
+  if (logStream_.is_open())
+  {
+    logStream_ << text;
+    logStream_.flush();
+  }
+}
+
 void Logger::LogMessage(LogLevel level, std::string_view tag, std::string_view message)
 {
   if (level < Level())
@@ -61,6 +92,7 @@ void Logger::LogMessage(LogLevel level, std::string_view tag, std::string_view m
   // Line format: [   1234ms] INFO  [tag] message.
   const std::string line = std::format("[{:>7}ms] {:<5} [{}] {}\n", elapsedMs, NameOf(level), tag, message);
   std::print("{}", line);
+  AppendFileText(line);
 }
 
 } // namespace lod

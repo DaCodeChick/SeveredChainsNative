@@ -1,7 +1,10 @@
 #pragma once
 
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <mutex>
+#include <string>
 #include <string_view>
 
 namespace lod
@@ -46,6 +49,29 @@ public:
   /// The current minimum level.
   [[nodiscard]] LogLevel Level() const;
 
+  /// Attaches a log file sink (append mode; parity: the reference's
+  /// `debug.log`). Lines go to console **and** the file.
+  ///
+  /// @param file The log file path (created/truncated-on-first-use).
+  /// @note Thread: Main thread (call before logging starts).
+  void AttachFile(const std::filesystem::path& file);
+
+  /// Detaches the log file sink.
+  /// @note Thread: Main thread.
+  void DetachFile();
+
+  /// The attached log file path (empty when none) — the crash handler
+  /// appends its report here.
+  [[nodiscard]] std::string_view LogFilePath() const;
+
+  /// Appends raw pre-formatted text to the log file only (the crash
+  /// handler's crash report; console output uses the normal levels).
+  ///
+  /// @param text The text (already formatted, newline-terminated lines).
+  /// @note Thread: Crash-handler safe only via the raw fd path (see
+  ///         `crash.cpp`); regular calls are mutex-serialized.
+  void AppendFileText(std::string_view text);
+
   /// Logs a formatted message.
   ///
   /// @param level Message level.
@@ -59,6 +85,13 @@ public:
     LogMessage(level, tag, std::format(format, std::forward<Args>(args)...));
   }
 
+  /// Zero-argument overload (preferred by overload resolution for argument-less
+  /// calls). A plain `string_view` avoids instantiating the empty variadic
+  /// pack — Apple Clang 21 + libc++ miscompile that instantiation inside
+  /// `std::function`'s immediate-call check (false "not a constant
+  /// expression" when a lambda body logs with no format arguments).
+  void Log(LogLevel level, std::string_view tag, std::string_view message) { LogMessage(level, tag, message); }
+
   /// Logs an already-built message (use when the text is dynamic).
   ///
   /// @param level Message level.
@@ -70,6 +103,8 @@ private:
   Logger() = default;
   mutable std::mutex mutex_; // mutable: internal synchronization (const queries lock it)
   LogLevel level_ = LogLevel::Info;
+  std::string logFile_;
+  std::ofstream logStream_;
 };
 
 } // namespace lod

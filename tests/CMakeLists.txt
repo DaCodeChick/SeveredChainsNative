@@ -14,6 +14,9 @@ add_executable(sc-tests
   engine/test_log.cpp
   engine/test_input.cpp
   engine/test_platform.cpp
+  engine/test_scheduler.cpp
+  engine/test_config.cpp
+  engine/test_crash.cpp
   engine/test_app.cpp)
 target_link_libraries(sc-tests PRIVATE sc-test-framework scengine)
 target_link_libraries(sc-tests PRIVATE sc_noexcept sc_warnings)

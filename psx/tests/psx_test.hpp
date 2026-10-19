@@ -129,7 +129,7 @@ inline int RunAll(int argc, char** argv)
     ctx.checks = 0;
     ctx.failures = 0;
     ctx.section.clear();
-    const bool ok = c.fn();
+    const bool ok = c.fn() && ctx.failures == 0; // failed checks always fail the case
     ++run;
     if (ok)
     {

@@ -7,6 +7,7 @@
 
 add_executable(psx-tests
   psx_tests_core.cpp
+  psx_tests_format.cpp
   psx_tests_main.cpp)
 target_link_libraries(psx-tests PRIVATE psx)
 target_compile_features(psx-tests PRIVATE cxx_std_23)

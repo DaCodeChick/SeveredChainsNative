@@ -82,9 +82,10 @@ Severed Chains' enhancements and modding capabilities.
   **ownership/lifetime** of any handle or pointer, and **thread safety** (which
   thread may call; default is main-thread unless documented).
 - Use standard Doxygen tags (`/** ... */`, `@brief`, `@param`, `@return`, `@errors`,
-  `@note`, `@thread`, `@see`) so `doxygen` generates the API reference without
-  per-file tweaks. Generated docs land in `docs/api/` (build target, see
-  build-system.md).
+  `@note`, `@see`). Thread-safety notes use the standard tag form
+  `@note Thread: ...` — this Doxygen build cannot parse custom command
+  aliases, so non-standard commands (e.g. a custom `@thread`) are avoided.
+  Generated docs land in `docs/api/` (build target, see build-system.md).
 - Third-party API names are preserved verbatim (no re-naming to fit our conventions).
 
 ### Naming Conventions (mandatory for project-owned code)

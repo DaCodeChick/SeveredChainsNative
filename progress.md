@@ -23,12 +23,13 @@
 
 ## Current Phase
 
-**Milestone 1 — Application Foundation: build-system + project-foundation
-portion COMPLETE (owner-approved scope; 2026-10-18/19).** All M1
-acceptance criteria verified on macOS Apple Silicon (see the M1 section
-below). Remaining M1 increments (Action-parity scheduler, Tag-based
-`config.dcnf`, crash handler, input parity table) and M2+ are pending.
-No Git history modified (M1 work is uncommitted, per owner instruction).
+**Milestone 1 — Application Foundation: COMPLETE (owner-approved scope;
+2026-10-18/19).** All M1 acceptance criteria verified on macOS Apple
+Silicon (see the M1 section below): build system, SDL3 window, full input
+parity (keyboard/mouse/gamepad → action/binding model), the fixed-rate
+Action-parity scheduler, Tag-based `config.dcnf` load/save, crash handler
++ crash log, clean shutdown. No Git history modified (the M1-completion
+increment is uncommitted, per owner instruction).
 
 ## Milestone 1 (2026-10-18/19 — build-system + project foundation)
 
@@ -147,6 +148,32 @@ happened. Fixed by making the probes toolchain-agnostic:
 system.md §2 documents the MSVC nuance. Windows/Linux re-run pending the
   next CI run.
 
+### M1 completed: input parity + scheduler + config + crash handler (2026-10-19)
+
+The four remaining M1 increments are implemented and verified — M1 is
+complete (owner scope; no new dependencies).
+
+**Input parity** (`src/engine/platform/`):
+- `activation.hpp/.cpp` — the full parity enum sets (`InputKey` 136, `InputMod(s)`, `InputButton` 26, `InputAxis` 6, `InputAxisDirection`, `InputGamepadType`, `InputClass`, `IgnoreSteamInputMode`) with the **Java constant names** as on-disk format data (`NameOf`/`*FromName`).
+- `input.hpp/.cpp` — `Activation` variant (Key/Scancode/Button/Axis), `ActionRegistry` (duplicate → `Status::AlreadyExists`), `ActionBindings` (required-modifier subset matching, parity `InputBindings`), the exact `InputActionState` port (500 ms repeat delay, 100 ms interval, REPEAT/HELD alternating at half interval), the full `Input` class: SDL3 event drain, focus-gated input, gamepad open/remove (instance-ID based, `SDL_GetJoysticks` + type filter), axis deadzone (menu/movement pairs) with max-absolute tracking, button hold counting, focus-loss release, rumble lerp, Steam Input workaround, `SaveBindings` → `KeybindValue`.
+- `default_bindings.cpp` — the CoreMod parity table: 43 default actions (menu/title/fmv/general/freecam/debug, fixed vs editable vs hidden flags) + the full default binding set (key/scancode/button/axis incl. Ctrl+M freecam).
+- `scheduler.hpp/.cpp` — port of the reference fixed-rate `Action`: integer `1e9/fps` period, deadline advancement, per-frame rate reprogramming, **skip-to-catch-up** resync when more than two periods behind; clock injected for tests.
+
+**Config** (`src/engine/config/` + `psx::format`):
+- `psx/format` — `ByteWriter`/`ByteReader` (LE, varint, ascii, **3-byte registry ID** — verified against the reference `FileData`/`ConfigStorage` byte math) + the Tag variant (Map/List/String/Int/Long/Float/Bool/Raw/RegistryID/Enum) with serialize/deserialize — golden byte checks + round-trips in `psx-tests`.
+- `config.hpp/.cpp` — `ConfigEntry`/`ConfigCollection` (registration order, per-entry raw serializer/deserializer, typed accessors), the **global `config.dcnf` layout** (int32 count + registry ID + int32 value length + raw bytes — byte golden in tests), **preset files** (Tag-serialized map with location keys + schema metadata, skipped-entries parity), missing-file no-op + corrupt-file error-without-touching semantics.
+- `raw_serializers.hpp/.cpp` — per-type byte-identical raw encodings (bool/int8/int32/int64/float32/enum-with-fallback/keybinds with sorted action IDs + the "key/scancode/button/axis" ASCII activation wire form).
+- `engine_configs.cpp` — `RegisterEngineConfigs`: the 16 M1 engine entries (deadzones, rumble, fullscreen/monitor, frame skip, show_fps, create_crash_save, game_speed_multiplier, controller keybinds, Steam input mode, ...) with the CoreMod-parity IDs/locations/defaults (parity table in the header).
+
+**Crash handler** (`src/engine/diagnostics/crash.*`):
+- POSIX: async-signal-safe `write()`-only handler for SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGABRT (`SA_RESETHAND`); compile-time version/commit/timestamp macros keep the signal path allocation-free; **platform-correct signal-name tables** (macOS SIGEMT=7/SIGBUS=10 vs Linux); best-effort backtrace; `CRASHLOG-<utc-epoch>.log` + append to `debug.log` + stderr; `_exit(1)` (parity `System.exit(1)`).
+- Parity crash fields: separator rule, `Crash detected`, `Severed Chains <v> commit <c> built <t>`, `Loaded mods: (none)` / `All mods: (none)` (empty-list parity — M1 has no mod system), the Discord contact lines, `Message: <SIGNAL> (signal <N>)`, `Stack trace:`.
+- Logger gained an attachable file sink (`debug.log`, parity). Host gained `--crash-test` (install handler → fault → exit 1) for the roadmap "injected failure" acceptance.
+
+**App wiring** (`src/engine/app/`): `RegisterEngineConfigs` → `LoadGlobalConfig` → `Input` (over a `ConfigCollection`-backed config view) → dual `ScheduledAction` (input @ 60 Hz + render @ `targetFps`, the frame hook for M2) → clean shutdown in reverse order (input → config save → window → platform).
+
+**Verification (all re-run):** clean build 0 errors/0 warnings; **46/46 tests** (30 engine — incl. new scheduler/config/crash/default-bindings/state-machine suites — + 16 psx); Doxygen 0 warnings; clang-format clean; flag audit (all 32 TUs `-fno-exceptions`+`-Werror`; all 14 engine + 4 psx library TUs also `-fno-rtti`); headless 300 frames (~60 fps, clean shutdown, `config.dcnf` written with the verified byte layout); real-display 300 frames; `--crash-test` → SIGSEGV(11) report with parity fields + backtrace + exit code 1 + `debug.log` append.
+
 ### Known toolchain findings (documented for future sessions)
 
 - CMake 4.4 `try_compile` source form: policy flags must go through
@@ -160,29 +187,46 @@ system.md §2 documents the MSVC nuance. Windows/Linux re-run pending the
   (ms-based `SDL_WaitEventTimeout` only); resize data is
   `event.window.data1/data2` (SDL3 removed the top-level `SDL_Event.data*`).
 - Doxygen 1.18: `USE_MDFILE_AS_MASTER` unsupported; no line-wrapping in
-  Doxyfile (all INPUT paths on one line).
+  Doxyfile (all INPUT paths on one line); **`ALIASES` values cannot be
+  parsed by this build** (single-line splits on whitespace, multi-line
+  lines are treated as unknown tags) — non-standard commands (e.g. a
+  custom `@thread`) are unusable; thread-safety notes use `@note Thread:`
+  (AGENTS.md tag list updated).
+- Apple Clang 21 + libc++: assigning a lambda to `std::function` whose body
+  calls a **variadic template with an empty pack** (e.g. a zero-argument
+  `format_string<>` logging call) misfires the immediate-call check ("call
+  to immediate function ... is not a constant expression"). Worked around
+  with a non-template zero-argument `Logger::Log` overload (preferred by
+  overload resolution); the bug reproduces for free templates too — avoid
+  empty-pack instantiations inside `std::function` lambdas on this
+  toolchain.
+- C++23 (libc++): `std::string`'s constructor from `std::string_view` is
+  **explicit** — no implicit conversion at `const std::string&` parameter
+  sites (repro kept; prefer `std::string_view` parameters).
+- SDL3 3.4.18: `SDL_GetJoysticks(int* count)` returns a **NULL-terminated
+  `SDL_JoystickID*` array of instance IDs** (no `SDL_NumJoysticks` —
+  deprecated/renamed; no `SDL_IsJoystickGamepad` — use
+  `SDL_GetJoystickTypeForID`); `SDL_GamepadButtonEvent::button` and
+  `SDL_JoyAxisEvent::axis` are raw `Uint8` (cast to the `SDL_Gamepad*`
+  enums); gamepad button constants are `SDL_GAMEPAD_BUTTON_*` (the
+  `SDL_CONTROLLER_BUTTON_*` names are renamed aliases); mouse-button
+  events carry no mods (use `SDL_GetModState()`).
 
 ### M1 items explicitly deferred (with reason)
 
-- **Tag-based `config.dcnf` load/save** — depends on the `psx` Tag module
-  (M2 scope); window/config parameters are compile-time defaults for now.
-- **Action-parity scheduler** — lands with the input-parity increment
-  (reference `Action.java` 60 Hz/5 ms queue semantics need the full input
-  map from `ModLoaderOptions`).
-- **Crash handler / crash log** — the diagnostics increment; the logger and
-  version metadata it depends on are in place.
-- **Windows/Linux** — CI matrix configured but not yet executed (no
-  runners on this machine); verify when CI runs.
+None — all M1 increments are implemented and verified (input parity,
+scheduler, Tag-based config, crash handler). Windows/Linux CI execution
+remains to be observed on the next runner run (no local runners).
 
 ### Next steps
 
-1. Owner review of M1 build + guidelines (code is uncommitted).
-2. M1 remainder: Action-parity scheduler, input parity table, Tag-based
-   config, crash handler (needs no new dependencies).
-3. G2 (SDL3_image) approval → M2 start; in parallel `psx` modules per
-   psx-library.md (gte/gpu/spu first — dependency-free, golden-gated).
-4. Golden-fixture generation with the user (Java reference + discs) for
-   M5+.
+1. Owner review + commit of the M1-completion increment (working tree is
+   uncommitted, per owner instruction).
+2. G2 (SDL3_image) approval → M2 start (rendering + psx modules gte/gpu/spu
+   first — dependency-free, golden-gated); `psx::format` is now in place
+   for the asset pipeline.
+3. Golden-fixture generation with the user (Java reference + discs) for
+   M5+..
 
 ## Naming-convention correction pass (2026-10-19, owner-directed)
 

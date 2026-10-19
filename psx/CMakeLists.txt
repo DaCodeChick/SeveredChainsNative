@@ -28,6 +28,8 @@ option(PSX_BUILD_TESTS "Build the psx test suite" ON)
 set(PSX_SOURCES
   src/core/version.cpp
   src/core/error.cpp
+  src/format/byte_buffer.cpp
+  src/format/tag.cpp
 )
 
 # No library type: BUILD_SHARED_LIBS decides (build-system.md §1).
