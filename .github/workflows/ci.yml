@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+# build-system.md §8: 3-platform matrix (Windows MSVC, Ubuntu GCC,
+# macOS arm64 Clang). M1 jobs: configure (runs the exception/RTTI compiler
+# policy probes) -> build (all targets) -> unit tests (sc-tests +
+# psx-tests). SDK probes / golden compiles / headless GPU smoke land in
+# later milestones.
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-24.04, windows-latest, macos-latest ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools + SDL3 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libsdl3-dev
+
+      - name: Install build tools + SDL3 (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja sdl3
+
+      # Windows: Ninja ships with the runner image; SDL3 is not installed —
+      # the build uses the pinned FetchContent release fallback
+      # (build-system.md §3, documented).
+
+      - name: Configure (CMake + Ninja)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test (CTest)
+        run: ctest --test-dir build --output-on-failure

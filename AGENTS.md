@@ -42,6 +42,15 @@ Severed Chains' enhancements and modding capabilities.
 
 ## C++23 Coding Standards
 
+- **MANDATORY READING: `docs/guidelines/cpp.md`** — every C++ implementation
+  task follows it before and during work. Modern, type-safe C++23 is the
+  default idiom: `std::format`/`std::print`-based logging with literal format
+  strings (`std::format_string`), `std::expected<T, Status>` error
+  propagation, RAII/value semantics, `std::span`/`std::string_view`/
+  `std::filesystem`/ranges, `enum class`/`constexpr`/`[[nodiscard]]`. The
+  printf family, `std::va_list`, C strings in C++ APIs, raw owning pointers,
+  and unnecessary macros are **prohibited**; the documented exceptions are
+  C third-party interop (SDL3) and PSX binary-format work (guidelines §9).
 - RAII, clear ownership/lifetimes, value semantics, explicit error/result types
   (`std::expected` / error enums), minimal global mutable state, minimal inheritance.
 - Clear interfaces between subsystems; standard containers and algorithms.
@@ -112,8 +121,9 @@ Severed Chains' enhancements and modding capabilities.
 
 ### Formatting: .clang-format (mandatory)
 
-- A root-level `.clang-format` (LLVM baseline, 4-space indent, attached braces,
-  120-column limit, grouped/sorted includes, Doxygen comments left intact) is the
+- A root-level `.clang-format` (LLVM baseline, 2-space indent, **Allman
+  braces**, 120-column limit, grouped/sorted includes, Doxygen comments left
+  intact) is the
   single source of formatting truth. Run `clang-format` on project-owned files you
   touch; do **not** mass-reformat untouched files.
 - Doxygen comment blocks are preserved (no reflow that breaks `@param`/`@return`

@@ -1,0 +1,344 @@
+# C++23 Coding Guidelines (mandatory)
+
+**Status:** mandatory for all project-owned C++ (engine, `psx` library, game,
+tools, plugins, tests). AGENTS.md references this document as required
+reading before any C++ implementation work.
+
+This project is **modern C++23**. Legacy C/C++ idioms — the printf family,
+`std::va_list`, C strings as API types, manual memory management,
+macro-based flow control — are **prohibited** in project code except at the
+narrow, documented interop boundaries in §9. Formatting (indentation,
+braces, line width) is governed by the root `.clang-format` (LLVM baseline,
+2-space indent, **Allman braces**, 120 columns); this document governs
+*design and idiom*, not layout.
+
+Rules are marked **MUST** (violations are defects), **SHOULD** (deviation
+needs a documented justification in the code), or **AVOID** (use the modern
+alternative).
+
+---
+
+## 1. Language baseline
+
+- **C++23** (`CMAKE_CXX_STANDARD 23`, no compiler extensions).
+- **Exceptions disabled** on every project target (`-fno-exceptions` /
+  `/EHs-c-`). No `throw`, `try`, `catch` — ever (AGENTS.md). Error handling
+  is `std::expected` and explicit codes (§4).
+- **RTTI disabled on public API targets** (`psx`, engine public API,
+  `sc-sdk`). No `dynamic_cast` in any public header. Engine-internal code
+  may use RTTI only where it does not appear in a public header (AGENTS.md).
+- Warnings: `-Wall -Wextra -Werror` (Clang/GCC), `/W4 /permissive- /WX`
+  (MSVC). Warnings are bugs; do not suppress with `#pragma` / `-Wno-*`
+  unless a targeted, commented, justified single-line suppression documents
+  a false positive.
+- `static_assert` for invariants; `[[assume]]` sparingly (optimizer hints
+  that the compiler cannot verify, with a comment).
+
+## 2. Standard library: preferred facilities
+
+Use the standard library before writing custom infrastructure. Preferred
+facilities by job:
+
+| Job | Use | Not |
+|---|---|---|
+| Formatted text / diagnostics | `std::format`, `std::print`, `std::println`, `std::format_string` | `printf`/`snprintf`/`sprintf`, `std::va_list`, `std::ostringstream` for simple formatting |
+| Owned text | `std::string` (or `std::string` members) | `char[]`, `char*`, buffers |
+| Borrowed text | `std::string_view` | `const char*` (C interop boundary only, §9) |
+| Owned byte sequences | `std::vector<std::byte>` / `std::vector<uint8_t>` | `malloc`/`free`, `new[]`/`delete[]` |
+| Non-owning byte view (decoders, I/O) | `std::span<const uint8_t>` | raw pointer + length pair, `const uint8_t*` + `size_t` as API |
+| Fixed-size buffers | `std::array<T, N>` | C arrays, `T data[N]` members |
+| Paths and files | `std::filesystem` | C strings for paths, `fopen` in C++ code |
+| Result of a fallible operation | `std::expected<T, E>` (§4) | out-parameters, error code + value pair, `bool` return for data ops |
+| Optional value | `std::optional<T>` | sentinel values, `bool hasX + T x` pairs |
+| Closed set of values | `enum class` (§6) | unscoped enums, magic integers, `bool` overloading |
+| Tagged union of states | `std::variant` (rarely) | tagged unions, char-discriminated structs |
+| Iteration and transformation | ranges (`std::ranges`, `std::views`) where they improve readability | hand-rolled index loops for what `std::ranges::copy`/`transform` do |
+| Bit-level work (PSX fixed-point, formats) | `std::bit` (`std::bit_cast`, `std::popcount`, …), fixed-width integers (`uint8_t`…`uint64_t`) | `reinterpret_cast`, union type-punning, char bit twiddling on non-POD |
+| Endianness-aware binary loads | explicit little-endian helpers built on `std::span` + `std::bit_cast`/byte assembly (the `psx` library provides these) | pointer casts of unaligned data |
+| Timers (app code) | `std::chrono` (steady clock for durations, system clock for wall time); SDL tick functions only where SDL event timing demands it | `time()`, `clock()` |
+| Threading (M5+) | `std::jthread`, `std::mutex`, `std::condition_variable`, `std::atomic` | C11 threads, `volatile` for synchronization, platform thread APIs directly |
+| Diagnostics call site | non-template logging entry points only (accurate `std::source_location`); the formatted template path deliberately omits it (Clang reports the template body line) | manual `__FILE__`/`__LINE__` plumbing in every call |
+| Compile-time only code | `constexpr` / `consteval` functions | preprocessor "computation" |
+
+- **MUST** prefer standard algorithms over hand-rolled loops where the
+  algorithm is the intent (`std::find`, `std::ranges::count`, …).
+- **SHOULD** keep range pipelines short and named; if a `std::views` chain
+  needs a comment to explain itself, split it into named steps.
+- **AVOID** `std::any` (no type safety at the call site) — `std::variant`
+  for known sets.
+
+## 3. Type-safe logging and diagnostics
+
+- **MUST** use `std::format` / `std::print` / `std::println` for all
+  formatted output. **The printf family is prohibited** in project C++:
+  no `printf`, `snprintf`, `sprintf`, `fprintf`, `std::va_list`, and no
+  `const char* format`-style APIs in project headers.
+- **MUST** use *literal* format strings for formatted logging. The engine
+  logger's formatted entry point takes `std::format_string<Args...>`, which
+  the compiler only accepts for string literals — this is the type safety:
+  a mismatched format string is a **compile error**, and (with exceptions
+  disabled) a runtime format error would otherwise terminate the process.
+  For a dynamic string, format it first with `std::format` (literal format)
+  and pass the result as a value.
+- The process logger (`sc::util::Logger`) is the one diagnostic sink:
+  leveled (`Trace`/`Debug`/`Info`/`Warning`/`Error`), tagged (subsystem
+  "marker" — parity with the reference's log4j markers), timestamped.
+  Log **through the logger**, never `std::print` from subsystem code (the
+  host `main` may `std::print` for CLI output such as `--version`/`--help`).
+  Line format: `[   1234ms] INFO  [marker] message` (reference log4j
+  style). Call-site capture via `std::source_location` is deliberately not
+  on the formatted template path — Clang reports the template body's line
+  there, not the call site; it remains available on non-template logging
+  entry points where it is accurate.
+- Logging is thread-safe (internal mutex). Format **before** locking.
+- Diagnostic I/O failure (full terminal, closed pipe) under
+  `-fno-exceptions` is a terminate condition — an accepted, documented last
+  resort for diagnostics, not a control-flow mechanism.
+
+Example:
+
+```cpp
+util::Logger::Instance().Log(util::LogLevel::Info, "window",
+    "created at {}x{} on monitor {}", width, height, monitorName);
+```
+
+## 4. Errors: `std::expected`, no exceptions
+
+- **MUST** return `std::expected<T, Status>` (or `Status` for
+  fire-and-forget operations) from every fallible API. Constructors that can
+  fail return `std::expected<T, Status>`; throwing constructors do not
+  exist (error-handling.md §2).
+- **MUST** mark `std::expected` return values `[[nodiscard]]`. Ignoring an
+  error result is a defect.
+- Error *codes* are typed (`sc::Status` engine-wide; `psx::Error` in the
+  `psx` library) with documented domain ranges and a `ToString`/`NameOf`
+  function per enum (diagnostics). **AVOID** returning `false` where an
+  `expected`/`Status` carries the *why*; `bool` returns are acceptable only
+  for state queries (`IsInitialized()`) and simple predicates.
+- **AVOID** out-parameters for errors, and C-style "error code + out value"
+  pairs — the one exception is a C interop boundary (§9).
+- RAII guarantees cleanup on every error path: a fallible sequence either
+  rolls back (or never commits partial state) or the owning object's
+  destructor tears down exactly what was acquired. Do not write manual
+  unwind code.
+- The `psx` library uses `std::expected<T, psx::Error>` with decoder-specific
+  error codes (malformed-class granularity per testing.md §2.11).
+
+## 5. RAII, ownership, lifetimes, value semantics
+
+- **MUST** express ownership with the type system:
+  - *Unique ownership*: value members, `std::unique_ptr<T>` (heap when the
+    lifetime/identity genuinely requires it — polymorphic subsystems,
+    cycles broken intentionally).
+  - *Shared ownership*: `std::shared_ptr<T>` **only** with a documented
+    reason (a real multi-owner lifetime, e.g. a resource used by several
+    subsystems with independent teardown). Default to unique.
+  - *Non-owning access*: references (always valid), `std::span`,
+    `std::string_view`, or a raw `const T*` / `T*` **strictly as
+    non-owning observation**.
+- **MUST NOT** own through a raw pointer: no raw owning pointers, no
+  `delete`, no `new` outside `std::make_unique`/`std::unique_ptr` factories,
+  no `malloc`/`free`, no `new[]`/`delete[]` in engine/game code. (The `psx`
+  library's decoders return owned IR by value — `std::vector`-based — never
+  raw allocations.)
+- **C resource ownership**: a C-owned resource (e.g. `SDL_Window*`) is owned
+  by exactly one RAII class, held as a `private` raw pointer named with a
+  comment marking it `C-interop owned resource`, null-checked, released in
+  `Destroy()` + the destructor (idempotent). The raw pointer may be exposed
+  read-only where a later layer needs it (M2 GPU) — documented, and the
+  escape hatch is named `Handle()`.
+- **Value semantics by default**: pass small/cheap types by value
+  (integers, enums, `string_view`, `Status`); pass by `const T&` when large
+  or lazily evaluated; take `T&&` / use `std::move` when the callee owns.
+  Copies are fine unless a measurement says otherwise — no speculative
+  moves.
+- Copy constructors/assignment: default (`= default`) or deleted. Non-
+  copyable types (resources, mutexes, the logger) delete copy and document.
+- Lifetimes: a borrowed reference/`string_view`/`span` **MUST NOT** outlive
+  its referent; a function must never return a view into a temporary.
+- **AVOID** global mutable state; the logger's process instance and
+  compile-time tables (`const`/`constexpr`) are the sanctioned exceptions.
+- **AVOID** inheritance for code reuse (composition). Inheritance is for
+  the interface patterns the architecture documents (plugin API frozen
+  classes, the test framework's registration), never for ad-hoc "mixins".
+
+## 6. Strong typing and const correctness
+
+- **MUST** use `enum class` with an explicit underlying type for every
+  closed set (states, actions, error codes, formats). Unscoped enums are
+  prohibited. Every public enum has a `[[nodiscard]] std::string_view
+  NameOf(...)` (or `ToString`) for diagnostics.
+- **MUST** use `constexpr` for compile-time constants and `consteval` for
+  compile-time-only computation. Integer constants are named
+  (`kWindowMinWidth`), never bare literals in logic.
+- **MUST** mark query functions, conversions, and error-returning functions
+  `[[nodiscard]]`.
+- **MUST** default member functions to `const`; drop `const` only to
+  mutate state. `mutable` only for internal caches with a comment.
+- **MUST** use fixed-width integers (`std::uint8_t` … `std::uint64_t`,
+  `std::int32_t`, …) where the width is meaningful (PSX formats, save
+  blobs, ABI-visible values); `std::size_t` for sizes/counts; `int32_t` for
+  screen coordinates/counts that can be negative. **AVOID** plain `int`
+  at API boundaries where the width matters (allowed for loop indices and
+  local bookkeeping).
+- **AVOID** overloading on integer types; prefer named strong types
+  (structs or `enum class`) so a `frame` is not interchangeable with a
+  `voxelCount`.
+- **MUST NOT** use `reinterpret_cast`. POD reinterpretation uses
+  `std::bit_cast` (both sides trivially copyable, same size —
+  `static_assert` it). Pointer arithmetic is confined to binary-format
+  decoding helpers (§9.2).
+- No implicit narrowing: let the compiler reject it; write the explicit
+  `static_cast` only when the domain is provably in range (comment when
+  non-obvious).
+
+## 7. Naming and documentation
+
+- Naming follows the AGENTS.md table exactly: flatcase abbreviated
+  namespaces (`sc::app`, `psx::tmd`, `game::combat`); **PascalCase** for
+  types, functions, *and methods* (free functions and member functions
+  alike), constants (with the `k` prefix), and enum values — with
+  **acronyms fully capitalized** (`EngineAPI`, `XADecoder`, `Rtps`,
+  `DecompressBPE`); `Id`/`Ids` is a word, not an acronym; camelCase for
+  variables and parameters; `camelCase_` for private fields;
+  UPPER_SNAKE_CASE for macros; snake_case files. C-linkage discovery
+  symbols: PascalCase with the `Sc` prefix. String *ids* stay lowercase.
+  Third-party names (SDL_*, luau_*, Qt) are preserved verbatim.
+- **MUST**: Doxygen-compatible comments on **all public project-owned C++
+  APIs** (AGENTS.md mandate) — purpose, `@param` (in/out, ownership),
+  `@return` (and the failure cases with their error codes), ownership and
+  thread-safety notes for anything shared or long-lived. Internal helpers
+  get comments where the *why* is non-obvious.
+- Comments explain *why* (and, for ports: the reference behavior and its
+  source file, e.g. `// parity: SdlWindow.java:137`), never what the code
+  already says.
+- `ReflowComments: false` in `.clang-format` exists to keep Doxygen blocks
+  intact — do not edit around it.
+
+## 8. Prohibited and discouraged patterns
+
+| Legacy pattern | Prohibited because | Use instead |
+|---|---|---|
+| `printf`/`snprintf`/`sprintf`, `std::va_list` | untyped formatting, runtime failures | `std::format` / `std::print` (§3) |
+| `const char*` / `char*` in C++ APIs | no length, no null guarantee, encoding drift | `std::string_view` (borrow), `std::string` (own) |
+| `new`/`delete`, `malloc`/`free` | manual lifetimes leak on error paths | values, `std::unique_ptr`, `std::vector` (§5) |
+| raw owning pointers / double ownership | aliasing, double-free | unique/shared pointers, RAII wrappers |
+| C-style casts (`(T)x`) | hides conversions | `static_cast`, `std::bit_cast`, `const_cast` (never in new code except §9) |
+| `reinterpret_cast`, union type-punning | UB-adjacent, ABI fragile | `std::bit_cast` on PODs, structured byte helpers |
+| unscoped enums, magic integers | namespace pollution, no exhaustiveness | `enum class` + `switch` with `NameOf` |
+| macros for flow control / "functions" | no type checking, no debuggability | `constexpr`/templates; the sanctioned exceptions are §8.1 |
+| variadic preprocessor macros | same | variadic templates |
+| `goto` | unstructured jumps | loops, `break`/`continue`, early returns |
+| `volatile` for synchronization | not atomic; data-race UB | `std::atomic`, mutexes |
+| out-parameter error codes (C++ side) | error easily ignored | `std::expected` (§4) |
+| hand-rolled string buffers | the STL is the buffer | `std::string`, `std::format` |
+| C arrays / `sizeof`-driven loops in C++ | no bounds, no value semantics | `std::array`, `std::span`, ranges |
+
+### 8.1 Sanctioned macro exceptions
+
+Macros are permitted **only** for:
+1. **Interop with C headers** that require them (rare; e.g. `extern "C"`
+   discovery symbols).
+2. **Bounded registration sugar in the test framework** (`SC_TEST`,
+   `SC_CHECK`, `SC_REQUIRE`) — static-initializer registration has no
+   macro-free spelling that stays readable; the macros do no flow control
+   and no side effects beyond registration.
+3. Build-system visibility (CMake) — not C++ macros.
+
+Anything else: rewrite as a `constexpr`/template function.
+
+## 9. Interop exceptions (where C is genuinely required)
+
+These are the **only** places C-style types may appear. At each boundary,
+convert to modern types **immediately** (one function deep) and do not let
+C types leak across the layer into public engine/game APIs.
+
+### 9.1 SDL3 (C API — the platform layer)
+
+- `SDL_*` types (`SDL_Window*`, `SDL_Event`, `SDL_Keycode`, `SDL_InitFlags`)
+  are permitted in `sc::platform` (and the host `main` for CLI hints).
+- C strings returned by SDL (`SDL_GetError()`, version strings) are
+  converted to `std::string` at the point of use — never stored as
+  `const char*` in project state.
+- `SDL_Window` is owned by the `Window` RAII class (§5). Raw `SDL_Window*`
+  is exposed via `Handle()` only where a later layer (M2 GPU) requires it,
+  documented as an escape hatch.
+- Above the platform layer, APIs take/return C++ types (our own structs,
+  `std::string`, `std::expected`), not SDL types — except the documented
+  GPU-layer boundary (M2+), where `SDL_GPU*` handles are wrapped by RAII
+  resource classes (rendering-sdl3-gpu.md).
+
+### 9.2 PSX binary formats (the `psx` library)
+
+Low-level byte manipulation is **expected and correct** here — this is
+where the "C-like" work legitimately lives, expressed in C++23:
+- `std::span<const uint8_t>` in, owned IR (`std::vector`-based value
+  types) out; decoders are pure functions (thread-safe, no shared state).
+- Fixed-width integers everywhere; explicit little-endian assembly;
+  `std::bit_cast` for POD reinterpretation (e.g. 32-bit → float).
+- GTE fixed-point conventions use `static_cast` with the exact reference
+  shifts, documented per operation (`// parity: Gte.java:line`).
+- No SDL, no Qt, no exceptions, no RTTI, no third-party — the boundary that
+  keeps this layer portable (psx-library.md §1).
+
+### 9.3 Native plugin API
+
+C++23 interfaces across the boundary; the single C-linkage discovery symbol
+(`ScPluginCreateV<N>`) is the only C (native-api.md). No C ABI.
+
+### 9.4 Qt (desktop tools, M11+)
+
+Qt's C++ API is used directly; the documented `qtbridge` exception-behavior
+boundary is the only place our no-exceptions policy meets Qt's throwing
+C++ (qt-integration.md §2).
+
+## 10. Low-level work is not prohibited
+
+§8 targets *unnecessary* legacy patterns in a modern codebase. Legitimate
+low-level programming **remains fully in scope** and is used deliberately:
+
+- PSX format decoding: byte-level parsing, fixed-point arithmetic, run
+  lengths, adaptive byte-pair tables (`psx::bpe`), GTE integer math
+  (`psx::gte`) — written with `std::span`/bit-cast/fixed-width ints,
+  golden-tested byte-exact (testing.md §2.11).
+- Software rasterizer (`psx::gpu`): per-pixel loops, scanline conversion,
+  fixed-point interpolation — performance-critical, measured, documented.
+- Platform interop: SDL3, and where a later milestone demands it,
+  platform APIs — behind RAII and the modern C++ surface.
+- Optimization: `constexpr` tables, branch prediction hints, vectorization
+  (autovec where possible, intrinsics only with a measurement justification
+  and a portable fallback).
+
+The rule is *modern C++ as the default idiom; low-level where the work
+requires it — never legacy by habit*.
+
+## 11. Compile-time rigor and quality gates
+
+- `-Werror` on all project sources (build-system.md §2). A new warning is a
+  build break to be fixed, not suppressed.
+- Configure-time **compiler policy probes** (build-system.md §2): a `throw`
+  TU must fail to compile; a `dynamic_cast` TU must fail on public API
+  targets. CI re-runs these on every compiler.
+- **Doxygen** runs over all public headers (target `sc-api-docs`); missing
+  or malformed doc comments on public symbols are a CI defect.
+- Formatted with the root `.clang-format` before review; **do not**
+  mass-reformat files you did not touch.
+
+## 12. Quick audit checklist (per file)
+
+- [ ] No `throw`/`try`/`catch`; errors via `std::expected`/`Status`,
+      `[[nodiscard]]` on error returns.
+- [ ] No printf family, no `va_list`; all formatted output via
+      `std::format`/`std::print` with literal format strings.
+- [ ] No raw owning pointers, no `new`/`delete`/`malloc`/`free`;
+      RAII at every resource boundary (C resources wrapped immediately).
+- [ ] No `const char*`/`char*` in project APIs (C strings converted at the
+      interop boundary).
+- [ ] `enum class` for all value sets; `constexpr` constants;
+      `[[nodiscard]]` on queries; member functions `const` by default.
+- [ ] No `reinterpret_cast`; `std::bit_cast` for POD views; fixed-width
+      ints where width matters.
+- [ ] No macros outside §8.1; no `goto`; no `volatile` synchronization.
+- [ ] Doxygen on every public symbol; `@param`/`@return`/error/
+      thread-safety notes; porting comments cite the reference source.
+- [ ] `clang-format` applied; Allman braces per `.clang-format`.

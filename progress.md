@@ -23,11 +23,119 @@
 
 ## Current Phase
 
-**Phase 0 — Research and Architecture: COMPLETE (incl. follow-up).**
-Awaiting explicit approval to begin Phase 1 (Milestone 1). No
-implementation code has been written. No Git history modified.
+**Milestone 1 — Application Foundation: build-system + project-foundation
+portion COMPLETE (owner-approved scope; 2026-10-18/19).** All M1
+acceptance criteria verified on macOS Apple Silicon (see the M1 section
+below). Remaining M1 increments (Action-parity scheduler, Tag-based
+`config.dcnf`, crash handler, input parity table) and M2+ are pending.
+No Git history modified (M1 work is uncommitted, per owner instruction).
 
-## Phase 0 Follow-Up (this session)
+## Milestone 1 (2026-10-18/19 — build-system + project foundation)
+
+### Scope (as approved by the owner)
+
+CMake + Ninja project skeleton, mandatory compiler policy (no exceptions,
+no RTTI on public API, probes), SDL3 init/window/input/event loop,
+diagnostics (type-safe logging, version injection), `psx` target skeleton,
+in-repo test framework + smoke tests, CI config, Doxygen target. No
+GPU, no gameplay, no asset extraction, no mod loading.
+
+### Owner feedback addressed (this session)
+
+The owner flagged legacy C/C++ patterns (printf-style logging, `const
+char*` APIs, `std::va_list`) in the initial implementation and required
+prescriptive guidelines. Delivered:
+
+- **`docs/guidelines/cpp.md`** — prescriptive C++23 coding guidelines:
+  modern stdlib facilities table (`std::format`/`std::print` type-safe
+  logging with literal format strings, `std::expected`, RAII/ownership,
+  `std::span`/`string_view`/ranges, `enum class`/`constexpr`/
+  `[[nodiscard]]`, strong typing), naming + Doxygen conventions, a
+  prohibited-patterns table (no printf family, no `std::va_list`, no C
+  strings in C++ APIs, no unnecessary macros), and documented exceptions
+  for C third-party interop (SDL3/PSX binary formats/plugins/Qt).
+- **`AGENTS.md`** — the guidelines are now MANDATORY READING for all C++
+  work in this repo.
+- **Audit + correction**: all M1 source rewritten/re-audited against the
+  guidelines — zero `printf`/`va_list`/C-string API surface in project
+  code (verified by grep: NONE). Test harnesses use `std::print`,
+  `std::string`, `string_view::find`.
+- One deliberate, documented limitation: `std::source_location` capture is
+  not on the formatted template logging path — Clang reports the template
+  body's line there, not the call site (verified with a minimal repro). It
+  remains available on non-template logging entry points where it is
+  accurate. Logged in guidelines §3.
+
+### What was built
+
+| Artifact | Notes |
+|---|---|
+| `CMakeLists.txt` (root) | C++23 mandatory, no compiler extensions, output dirs, version metadata injection (version/commit/timestamp/channel), subdirectory layout |
+| `cmake/versions.cmake` | Pinned SDL3 (3.4.18 fetch fallback + sha256), project options (`SC_TESTS`, `SC_DOCS`, `SC_SANITIZERS`) |
+| `cmake/ScToolchain.cmake` | `sc_noexcept`/`sc_nortti`/`sc_warnings` interface targets; `sc_add_library()` (typeless — `BUILD_SHARED_LIBS` decides the build form); configure-time compiler policy probes; sanitizer options |
+| `cmake/ScDeps.cmake` | SDL3 resolution: system/Homebrew first, pinned FetchContent fallback |
+| `cmake/ScDocs.cmake` | `sc_add_doxygen_target()` → `sc-api-docs` (warning-clean) |
+| `cmake/probes/` | `throw_probe.cpp`, `rtti_probe.cpp` — verify the policy flags actually reject `throw`/`dynamic_cast` (FATAL_ERROR otherwise) |
+| `psx/` | `psx` target (typeless, ZERO deps, prefix-free identity, self-contained CMake — builds standalone with `cmake -S psx`); `psx/core` version + error modules; **self-contained `psx-tests`** (own `psx_test.hpp` harness — psx is extractable, so its tests don't depend on the host repo's framework) |
+| `src/engine/` (`scengine`) | `util` (Status/expected, Logger, Version), `platform` (SdlPlatform, Window, Input), `app` (App: SDL init → window → event loop with frame pacing → clean shutdown) |
+| `src/host/` (`severed-chains`) | Thin `main`: `--version`, `--help`, `--frames`, `--headless`, `--log-level` |
+| `tests/` | In-repo framework (`sc-test-framework`, bool-based, no exceptions) + engine smoke tests (status, log, input, platform round-trip, headless app run, version injection) |
+| `.github/workflows/ci.yml` | 3-OS matrix (macOS/Windows/Linux): configure → probes → build → ctest → clang-format check |
+
+### Verification results (macOS Apple Silicon, all re-run from clean slate)
+
+| Check | Result |
+|---|---|
+| `cmake -G Ninja && ninja` (RelWithDebInfo) | PASS — 0 errors, 0 warnings |
+| Compiler policy probes at configure time | PASS — `throw` and `dynamic_cast` rejected by the toolchain flags |
+| `ctest` (integrated) | PASS — 14 engine + 2 psx tests |
+| `psx` standalone build + tests | PASS — `cmake -S psx`, 2/2 tests, zero deps |
+| `sc-api-docs` (Doxygen) | PASS — HTML generated, 0 warnings |
+| `clang-format --dry-run --Werror` on all sources | PASS |
+| Flag audit (`compile_commands.json`) | PASS — every TU has `-fno-exceptions` + `-Werror`; the 9 public-API TUs also `-fno-rtti` |
+| `./severed-chains --version` | PASS — prints injected version/commit/timestamp/channel |
+| Headless run (`--frames 30 --headless`) | PASS — clean shutdown, correct pacing (~15.4 ms/frame at 60) |
+| Real-display run (500 frames) | PASS — window opens, event loop runs (~63 fps), clean shutdown log |
+| Legacy-pattern audit | PASS — no `printf`/`va_list`/C-string APIs in project code |
+
+### Known toolchain findings (documented for future sessions)
+
+- CMake 4.4 `try_compile` source form: policy flags must go through
+  `COMPILE_DEFINITIONS` (verified to inject raw compile-line arguments);
+  `CMAKE_FLAGS "-DCMAKE_CXX_FLAGS=..."` does NOT reach the probe compile.
+- Apple Clang 21: a variadic pack followed by a trailing defaulted
+  `std::source_location` parameter breaks template deduction (repro
+  kept in guidelines §3 note).
+- SDL3 3.4.18: `SDL_GetVersion()` is argument-less returning a packed int
+  (use `SDL_VERSIONNUM_MAJOR/MINOR/MICRO`); no `SDL_WaitEventTimeoutNS`
+  (ms-based `SDL_WaitEventTimeout` only); resize data is
+  `event.window.data1/data2` (SDL3 removed the top-level `SDL_Event.data*`).
+- Doxygen 1.18: `USE_MDFILE_AS_MASTER` unsupported; no line-wrapping in
+  Doxyfile (all INPUT paths on one line).
+
+### M1 items explicitly deferred (with reason)
+
+- **Tag-based `config.dcnf` load/save** — depends on the `psx` Tag module
+  (M2 scope); window/config parameters are compile-time defaults for now.
+- **Action-parity scheduler** — lands with the input-parity increment
+  (reference `Action.java` 60 Hz/5 ms queue semantics need the full input
+  map from `ModLoaderOptions`).
+- **Crash handler / crash log** — the diagnostics increment; the logger and
+  version metadata it depends on are in place.
+- **Windows/Linux** — CI matrix configured but not yet executed (no
+  runners on this machine); verify when CI runs.
+
+### Next steps
+
+1. Owner review of M1 build + guidelines (code is uncommitted).
+2. M1 remainder: Action-parity scheduler, input parity table, Tag-based
+   config, crash handler (needs no new dependencies).
+3. G2 (SDL3_image) approval → M2 start; in parallel `psx` modules per
+   psx-library.md (gte/gpu/spu first — dependency-free, golden-gated).
+4. Golden-fixture generation with the user (Java reference + discs) for
+   M5+.
+
+## Phase 0 Follow-Up (prior session)
 
 ### 1. Three additional repositories researched (all read-only, all AGPL-3.0)
 
@@ -298,7 +406,7 @@ supersede the specific items listed in §7.
 - Golden-fixture generation requires user cooperation (Java reference +
   discs + machine).
 
-## Next Steps (Phase 1, upon approval)
+## Next Steps (superseded by the M1 section above — kept for history)
 
 1. Confirm approval gates (G1/G2 + the fate-compiler decision at minimum).
 2. Milestone 1: CMake skeleton + sc_noexcept/sc_nortti + SDL3 platform/
