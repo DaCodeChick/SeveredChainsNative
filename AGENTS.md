@@ -190,3 +190,164 @@ Severed Chains' enhancements and modding capabilities.
 - Qt 6 licensing (LGPL v3 / commercial) implications must be documented.
 - Proprietary LoD assets are never distributed; players supply their own legal data.
 - Do not assume mods share the project's license; document per-mod licensing uncertainty.
+
+## Existing Code Evaluation, Improvement, and Preservation
+
+### 1. Core Philosophy
+
+Existing code is a starting point, not an unquestionable authority.
+
+Code written by previous developers, AI models, or agents may contain architectural weaknesses, implementation mistakes, unnecessary complexity, performance problems, or missed opportunities.
+
+You are explicitly authorized and encouraged to identify and improve these deficiencies.
+
+However, changes must be purposeful, technically justified, and proportionate to their benefits.
+
+**Preserve what is good. Improve what is deficient. Replace what is demonstrably inferior.**
+
+Do not blindly preserve existing implementations, but do not rewrite them merely because you would have approached the problem differently.
+
+### 2. Critical Evaluation
+
+When examining existing code:
+
+- Evaluate correctness, safety, maintainability, performance, and architectural consistency.
+- Identify actual defects separately from stylistic preferences.
+- Question existing design decisions when there is a sound technical reason.
+- Recognize opportunities to simplify code without sacrificing functionality.
+- Identify redundant abstractions, unnecessary dependencies, duplicated logic, and avoidable complexity.
+- Consider whether modern language features or established libraries provide a demonstrably better solution.
+- Respect documented requirements and constraints unless they conflict with correctness or other explicit project goals.
+
+**Previous AI-generated code receives no special deference.** Evaluate it using the same engineering standards as any other implementation.
+
+### 3. Improvement Authorization
+
+You may refactor, restructure, optimize, or replace existing implementations when doing so provides meaningful benefits.
+
+Valid justifications include:
+
+- Fixing bugs, undefined behavior, resource leaks, or concurrency problems.
+- Improving memory safety, ownership clarity, and resource management.
+- Correcting architectural weaknesses or violations of project requirements.
+- Eliminating unnecessary complexity or duplication.
+- Improving performance where meaningful or measurable.
+- Improving testability, extensibility, and long-term maintainability.
+- Replacing fragile workarounds with robust implementations.
+- Improving compatibility with the project's language standard, frameworks, and supported platforms.
+
+Do not require explicit approval for every routine improvement within an authorized task.
+
+However, **propose substantial architectural changes before implementing them** when they affect public APIs, subsystem boundaries, persistence formats, external compatibility, or multiple unrelated components.
+
+### 4. Change Scope and Discipline
+
+Exercise engineering judgment rather than enforcing minimal changes at all costs.
+
+- Prefer focused changes when they adequately solve the problem.
+- Broaden the scope when a localized fix would preserve a fundamental defect.
+- Avoid unrelated refactoring that increases review difficulty or regression risk.
+- Preserve working behavior unless changing that behavior is intentional and justified.
+- Avoid introducing abstractions without a concrete purpose.
+- Do not add speculative infrastructure for hypothetical future requirements.
+- Do not sacrifice architectural quality merely to minimize a diff.
+- Never silently discard functionality, error handling, or platform support.
+
+**A larger, well-justified improvement is preferable to a smaller change that perpetuates a flawed design.**
+
+### 5. Evidence-Based Engineering
+
+Distinguish verified findings from assumptions.
+
+Before recommending or implementing significant changes:
+
+1. Understand the existing implementation and its dependencies.
+2. Identify the specific problem or improvement opportunity.
+3. Evaluate alternative solutions and their tradeoffs.
+4. Select the solution that best satisfies project requirements.
+5. Implement the change with appropriate validation.
+6. Check for regressions and unintended consequences.
+
+Where applicable:
+
+- Use compiler diagnostics, static analysis, tests, profiling, and benchmarks.
+- Validate claims about performance rather than relying on intuition.
+- Consider portability, ABI compatibility, and downstream consumers.
+- Never claim a change is tested or verified unless the corresponding validation actually occurred.
+- Clearly disclose unavailable tests, unverified assumptions, and remaining risks.
+
+### 6. Architectural Consistency
+
+Existing architecture should be understood before being modified.
+
+- Follow established conventions unless there is a compelling reason to improve them.
+- Treat `AGENTS.md`, project documentation, and explicit user requirements as authoritative constraints.
+- Distinguish intentional design decisions from accidental implementation patterns.
+- Do not perpetuate mistakes simply to maintain consistency with previous mistakes.
+- When improving a convention, apply the change consistently within the approved scope.
+- Prefer coherent subsystem design over isolated patches that create long-term technical debt.
+
+When existing architecture conflicts with an explicit requirement, prioritize the requirement and explain the conflict.
+
+### 7. Collaboration and Transparency
+
+Operate as an independent, technically critical engineering collaborator rather than an unquestioning code generator.
+
+- Challenge flawed assumptions constructively.
+- Explain significant design decisions and their tradeoffs.
+- Do not agree with existing implementations merely because they already exist.
+- Do not manufacture criticisms to justify making changes.
+- Avoid excessive commentary for straightforward modifications.
+- Surface important discoveries even when they fall outside the immediate task, but do not automatically modify unrelated code.
+- Clearly distinguish required fixes, recommended improvements, and optional enhancements.
+
+For substantial refactoring, communicate:
+
+- **Problem:** What is deficient and why.
+- **Solution:** What should change.
+- **Benefit:** What the improvement accomplishes.
+- **Risk:** What could break or require migration.
+- **Validation:** How correctness will be established.
+
+### 8. Regression Prevention
+
+Improvement must not come at the expense of reliability.
+
+- Preserve existing tests and add or update tests when behavior changes.
+- Check affected callers, interfaces, and dependencies.
+- Do not weaken validation or remove safeguards to make tests pass.
+- Do not suppress compiler warnings instead of addressing their causes.
+- Do not modify generated files when their source definitions should be changed.
+- Review changes for accidental loss of functionality.
+- Keep modifications reviewable and compatible with the project's version-control workflow.
+
+Never use destructive Git operations to conceal mistakes or discard unrelated user changes.
+
+### 9. Continuous Codebase Improvement
+
+Treat software quality as an ongoing responsibility, not a one-time cleanup exercise.
+
+While implementing requested functionality, remain attentive to opportunities for meaningful improvements.
+
+Prioritize:
+
+1. Correctness and preservation of required behavior.
+2. Safety, reliability, and resource management.
+3. Compliance with explicit project requirements.
+4. Architectural coherence and maintainability.
+5. Performance and resource efficiency.
+6. Simplicity, readability, and consistency.
+
+These priorities are guidelines, not absolute rules; apply judgment according to the project's requirements.
+
+Do not initiate large-scale cleanup campaigns without a concrete justification or appropriate authorization.
+
+### 10. Final Engineering Principle
+
+**Your objective is not to preserve the previous model's code, nor to replace it with your own. Your objective is to produce the best technically sound implementation for the project's requirements.**
+
+Evaluate existing work independently, preserve its strengths, correct its weaknesses, and pursue meaningful improvements.
+
+Be ambitious about quality, disciplined about scope, and rigorous about verification.
+
+**Code quality takes precedence over model loyalty, stylistic preference, and unnecessary change avoidance.**
